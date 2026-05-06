@@ -56,7 +56,7 @@ export const Link = component$<LinkProps>((props) => {
 
         if (elm && elm.href) {
           const url = new URL(elm.href);
-          prefetchRoute(url, true, 0.8, head.manifestHash);
+          prefetchRoute(url, true, 0.8, head.manifestHash, false);
         }
       })
     : null;
@@ -125,7 +125,8 @@ export const Link = component$<LinkProps>((props) => {
           // deprecated prop below, remove in favor of prefetchData
           prefetchProp === true)
       ) {
-        handleDataPrefetch?.(null, anchorRef.value);
+        const url = new URL(anchorRef.value.href);
+        prefetchRoute(url, true, 0.8, head.manifestHash, shouldPrefetchBundle);
       } else if (
         shouldPrefetchBundle &&
         (prefetchBundleProp === 'visible' ||
@@ -134,7 +135,7 @@ export const Link = component$<LinkProps>((props) => {
           prefetchProp === true)
       ) {
         const url = new URL(anchorRef.value.href);
-        prefetchRoute(url, true, 0.8, head.manifestHash);
+        prefetchRoute(url, false, 0.8);
       }
     }
   });

@@ -12,15 +12,17 @@ import { loadRoute } from './routing';
  * `products/[id]/`), not by actual pathname (e.g. `products/123/`).
  *
  * @param url - The URL pathname to prefetch
- * @param prefetchData - Whether to also prefetch loader data
+ * @param prefetchData - Whether to prefetch loader data
  * @param probability - Bundle preload probability (0-1, default 0.8)
  * @param manifestHash - Build manifest hash for loader URLs (from `useDocumentHead().manifestHash`)
+ * @param prefetchBundle - Whether to prefetch route JS bundles
  */
 export async function prefetchRoute(
   url: URL,
   prefetchData?: boolean,
   probability = 0.8,
-  manifestHash?: string
+  manifestHash?: string,
+  prefetchBundle = true
 ) {
   if (!isBrowser) {
     return;
@@ -36,14 +38,16 @@ export async function prefetchRoute(
       return;
     }
 
-    // Preload JS bundles using the route NAME (not pathname) — the bundle graph
-    // is keyed by route name (e.g. "products/[id]/") not actual path
-    let routeName = loadedRoute.$routeName$;
-    routeName = routeName.endsWith('/') ? routeName : routeName + '/';
-    if (routeName.length > 1 && routeName.startsWith('/')) {
-      routeName = routeName.slice(1);
+    if (prefetchBundle) {
+      // Preload JS bundles using the route NAME (not pathname) — the bundle graph
+      // is keyed by route name (e.g. "products/[id]/") not actual path
+      let routeName = loadedRoute.$routeName$;
+      routeName = routeName.endsWith('/') ? routeName : routeName + '/';
+      if (routeName.length > 1 && routeName.startsWith('/')) {
+        routeName = routeName.slice(1);
+      }
+      preload(routeName, probability);
     }
-    preload(routeName, probability);
 
     if (!prefetchData || !manifestHash) {
       return;
