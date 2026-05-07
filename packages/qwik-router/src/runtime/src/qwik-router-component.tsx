@@ -513,6 +513,8 @@ export const useQwikRouter = (props?: QwikRouterProps) => {
       let trackUrl: URL;
       let endpointResponse: EndpointResponse | undefined;
       let actionData: { action?: string; actionResult?: unknown; status: number } | undefined;
+      let actionLoaderHashes: string[] | undefined;
+      let shouldInvalidateActionLoaders = false;
       let loadedRoute: LoadedRoute;
       if (isServer) {
         // server
@@ -572,21 +574,8 @@ export const useQwikRouter = (props?: QwikRouterProps) => {
             });
           }
 
-          // Apply loader updates from action result via setLoaderSignalValue.
-          // This preserves track() subscriptions for future re-computations.
-          if (result.loaderValues) {
-            for (const [id, value] of Object.entries(result.loaderValues)) {
-              const signal = loaderState[id];
-              if (signal) {
-                setLoaderSignalValue(signal, value);
-              }
-            }
-          }
-          if (result.loaderHashes) {
-            for (const hash of result.loaderHashes) {
-              loaderState[hash]?.invalidate(true);
-            }
-          }
+          actionLoaderHashes = result.loaderHashes;
+          shouldInvalidateActionLoaders = true;
         }
       }
 
@@ -594,6 +583,17 @@ export const useQwikRouter = (props?: QwikRouterProps) => {
       const contentModules = $mods$ as ContentModule[];
       updateRouteLoaderPaths(routeLoaderCtx, loadedRoute.$loaderPaths$, trackUrl);
       const routeLoaders = ensureRouteLoaderSignals(contentModules, loaderState, routeLoaderCtx);
+      if (shouldInvalidateActionLoaders) {
+        if (actionLoaderHashes !== undefined) {
+          for (const hash of actionLoaderHashes) {
+            loaderState[hash]?.invalidate(true);
+          }
+        } else {
+          for (const loader of routeLoaders) {
+            loaderState[loader.__id].invalidate(true);
+          }
+        }
+      }
       if (routeLoaders.length > 0) {
         // Trigger loader signals to fetch data for the new route. No await —
         // we want to render ASAP. Loaders update the page when they resolve,
