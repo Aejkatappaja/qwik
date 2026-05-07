@@ -24,19 +24,23 @@ import {
   Slot,
   useTask$,
   useSignal,
+  useStylesScoped$,
   useStore,
   Fragment as Signal,
 } from '@qwik.dev/core';
 import { ErrorProvider, emulateExecutionOfBackpatch } from '../../testing/rendering.unit-util';
 import { delay } from '../shared/utils/promises';
+import { getScopedStyles } from '../shared/utils/scoped-stylesheet';
 import * as logUtils from '../shared/utils/log';
 import { renderToStream } from '../../server/ssr-render';
 import type { StreamWriter } from '../../server/types';
+import { cleanupAttrs } from '../../testing/element-fixture';
 
 const debug = false; //true;
 Error.stackTraceLimit = 100;
 
 const loading = '<div style="display:contents"><span>Loading...</span></div>';
+const OOOS_SCOPED_STYLE = `.ooos-scoped { color: red; }`;
 
 describe.each([
   { render: ssrRenderToDom }, //
@@ -1198,6 +1202,135 @@ describe('renderToStream: out-of-order Suspense', () => {
     const html = chunks.join('');
     expect(html).toContain('<template q:r="1">');
     expect(html).toContain('Slotted done');
+  });
+
+  it('should swap projected Slot children into the content host when resolved later', async () => {
+    let resolveSlow!: (value: JSXOutput) => void;
+    const slow = new Promise<JSXOutput>((resolve) => {
+      resolveSlow = resolve;
+    });
+    const Slow = component$(() => <>{slow}</>);
+    const Boundary = component$(() => (
+      <Suspense fallback={<p id="ooos-slot-fallback">Waiting slot swap</p>}>
+        <Slot />
+      </Suspense>
+    ));
+    const chunks: string[] = [];
+
+    const renderPromise = renderToStream(
+      <main>
+        <Boundary>
+          <Slow />
+        </Boundary>
+      </main>,
+      {
+        containerTagName: 'div',
+        qwikLoader: 'never',
+        stream: {
+          write(chunk) {
+            chunks.push(chunk);
+          },
+        },
+        streaming: {
+          inOrder: { strategy: 'disabled' },
+          outOfOrder: { strategy: 'suspense' },
+        },
+      }
+    );
+
+    await vi.waitFor(() => expect(chunks.join('')).toContain('Waiting slot swap'));
+    resolveSlow(<strong id="ooos-slot-resolved">Slotted swapped</strong>);
+    await renderPromise;
+
+    const document = createDocument({ html: chunks.join('') });
+    const scripts = Array.from(
+      document.querySelectorAll('script[type="text/javascript"]'),
+      (script) => script.textContent || ''
+    );
+    // eslint-disable-next-line no-new-func
+    new Function('document', scripts.join('\n'))(document);
+
+    const contentHost = document.querySelector('[q\\:rp="1"]') as HTMLElement;
+    const resolved = document.querySelector('#ooos-slot-resolved') as HTMLElement;
+    const fallbackHost = document.querySelector('#ooos-slot-fallback')!
+      .parentElement as HTMLElement;
+    expect(contentHost.contains(resolved)).toBe(true);
+    expect(contentHost.style.display).toBe('contents');
+    expect(fallbackHost.style.display).toBe('none');
+    expect(contentHost.querySelector('template[q\\:r="1"]')).toBeFalsy();
+  });
+
+  it('should preserve scoped styles for projected Slot children when resolved later', async () => {
+    let resolveSlow!: (value: JSXOutput) => void;
+    const slow = new Promise<JSXOutput>((resolve) => {
+      resolveSlow = resolve;
+    });
+    (globalThis as any).__ooosScopedStyleId = '';
+
+    const StyledSlotContent = component$(() => {
+      const scopedStyle = useStylesScoped$(OOOS_SCOPED_STYLE);
+      (globalThis as any).__ooosScopedStyleId = scopedStyle.scopeId;
+      return (
+        <strong id="ooos-scoped-slot" class="ooos-scoped">
+          Styled slot
+        </strong>
+      );
+    });
+    const Slow = component$(() => <>{slow}</>);
+    const Boundary = component$(() => (
+      <Suspense fallback={<p id="ooos-scoped-fallback">Waiting scoped slot</p>}>
+        <Slot />
+      </Suspense>
+    ));
+    const chunks: string[] = [];
+
+    const renderPromise = renderToStream(
+      <main>
+        <Boundary>
+          <Slow />
+        </Boundary>
+      </main>,
+      {
+        containerTagName: 'div',
+        qwikLoader: 'never',
+        stream: {
+          write(chunk) {
+            chunks.push(chunk);
+          },
+        },
+        streaming: {
+          inOrder: { strategy: 'disabled' },
+          outOfOrder: { strategy: 'suspense' },
+        },
+      }
+    );
+
+    await vi.waitFor(() => expect(chunks.join('')).toContain('Waiting scoped slot'));
+    resolveSlow(<StyledSlotContent />);
+    await renderPromise;
+
+    const document = createDocument({ html: chunks.join('') });
+    const scripts = Array.from(
+      document.querySelectorAll('script[type="text/javascript"]'),
+      (script) => script.textContent || ''
+    );
+    // eslint-disable-next-line no-new-func
+    new Function('document', scripts.join('\n'))(document);
+
+    const rawStyleId = (globalThis as any).__ooosScopedStyleId as string;
+    const styleId = rawStyleId.substring(2);
+    const scopeStyle = getScopedStyles(OOOS_SCOPED_STYLE, styleId);
+    const resolved = document.querySelector('#ooos-scoped-slot') as HTMLElement;
+    const styleElement = document.querySelector(`style[q\\:style="${styleId}"]`) as HTMLElement;
+    expect(rawStyleId).not.toBe('');
+    expect(resolved.className).toBe(`${rawStyleId} ooos-scoped`);
+    expect(cleanupAttrs(styleElement.outerHTML)).toBe(
+      `<style q:style="${styleId}">${scopeStyle}</style>`
+    );
+    expect((document.querySelector('[q\\:rp="1"]') as HTMLElement).contains(styleElement)).toBe(
+      true
+    );
+    delete (globalThis as any).__ooosScopedStyleId;
   });
 
   it('should let resolved segment QRLs capture root-owned state', async () => {
