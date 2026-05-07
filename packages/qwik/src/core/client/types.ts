@@ -62,9 +62,6 @@ export interface QDocument extends Document {
    */
   qVNodeData: WeakMap<Element, string>;
 
-  /** Processes newly inserted vnode metadata, used by OOOS before/after resume. */
-  qProcessVNodeData?: (document: Document) => void;
-
   /** Processes an out-of-order Suspense segment after its resolved HTML is swapped in. */
   qProcessOOOS?: (document: Document) => void;
 }

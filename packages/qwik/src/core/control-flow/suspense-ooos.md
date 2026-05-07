@@ -43,7 +43,7 @@ qO()
 
 segment scripts
   The delayed scripts emitted for a segment: q:s state, q:s vnode data, appended
-  qfuncs when needed, backpatch data, and the qO.p() processing trigger.
+  qfuncs when needed, and backpatch data.
 ```
 
 ## Contract
@@ -318,7 +318,7 @@ The root state is always first.
 
 ### After root state
 
-Buffered segment scripts are drained immediately after root container data is emitted:
+Buffered segment scripts are drained before the root container data is processed:
 
 ```html
 <script type="qwik/state" q:instance="..." q:s="s1">
@@ -327,12 +327,9 @@ Buffered segment scripts are drained immediately after root container data is em
 <script type="qwik/vnode" q:s="s1">
   ...
 </script>
-<script>
-  qO.p();
-</script>
 ```
 
-Now the browser can process:
+The browser processes this data during the normal root resume:
 
 ```text
 qProcessOOOS(document)
@@ -387,10 +384,9 @@ This is a simplified stream where the Suspense promise resolves before the root 
 ```
 
 ```html
-<!-- chunk 4: segment scripts after root state -->
+<!-- chunk 4: buffered segment scripts -->
 <script type="qwik/state" q:instance="abc" q:s="s1">...</script>
 <script type="qwik/vnode" q:s="s1">...</script>
-<script>qO.p()</script>
 </div>
 ```
 
@@ -595,8 +591,7 @@ packages/qwik/src/core/control-flow/suspense.tsx
 
   SSRContainer.emitOutOfOrderSegmentScripts()
     buffers scripts before root state
-    writes scripts immediately after root state is ready
-    triggers qProcessOOOS()
+    writes scripts before qO() once root state is ready
 
 packages/qwik/src/server/ssr-container.ts
   segment()

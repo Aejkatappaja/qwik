@@ -568,7 +568,7 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
         await readyRenders[i]();
       }
     }
-    this.emitQueuedOutOfOrderSegmentScripts(false);
+    this.emitQueuedOutOfOrderSegmentScripts();
     this.rootContainerDataStarted = true;
   }
 
@@ -580,7 +580,7 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
     return ++this.outOfOrderId;
   }
 
-  emitOutOfOrderSegmentScripts(scripts: string): ValueOrPromise<void> {
+  emitOutOfOrderSegmentScripts(scripts: string): void {
     if (!__EXPERIMENTAL__.suspense || !scripts) {
       return;
     }
@@ -591,25 +591,21 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
       }
     }
     this.writeOutOfOrderSegmentScripts(scripts);
-    return this.streamHandler.flush();
   }
 
-  private emitQueuedOutOfOrderSegmentScripts(process = true): void {
+  private emitQueuedOutOfOrderSegmentScripts(): void {
     if (!__EXPERIMENTAL__.suspense || !this.outOfOrderSegmentScripts.length) {
       return;
     }
     const scripts = this.outOfOrderSegmentScripts;
     this.outOfOrderSegmentScripts = [];
     for (let i = 0; i < scripts.length; i++) {
-      this.writeOutOfOrderSegmentScripts(scripts[i], process);
+      this.writeOutOfOrderSegmentScripts(scripts[i]);
     }
   }
 
-  private writeOutOfOrderSegmentScripts(scripts: string, process = true): void {
+  private writeOutOfOrderSegmentScripts(scripts: string): void {
     this.write(scripts);
-    if (process) {
-      this.emitInlineScript('qO.p()');
-    }
   }
 
   async segment(

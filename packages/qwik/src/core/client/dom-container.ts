@@ -127,7 +127,6 @@ export class DomContainer extends _SharedContainer implements IClientContainer {
     if (!document.qVNodeData) {
       processVNodeData(document);
     }
-    document.qProcessVNodeData = processVNodeData;
     if (__EXPERIMENTAL__.suspense) {
       document.qProcessOOOS ||= (doc: Document) => {
         processVNodeData(doc);

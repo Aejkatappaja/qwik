@@ -744,7 +744,6 @@ export type PublicProps<PROPS> = (PROPS extends Record<any, any> ? Omit<PROPS, `
 // @internal (undocumented)
 export interface _QDocument extends Document {
     qProcessOOOS?: (document: Document) => void;
-    qProcessVNodeData?: (document: Document) => void;
     // (undocumented)
     qVNodeData: WeakMap<Element, string>;
 }

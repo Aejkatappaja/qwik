@@ -24,12 +24,10 @@ type OutOfOrderExecutor = {
   (boundaryId: number): void;
   d: Document;
   g(groupId: number, total: number, order: string): void;
-  p(): void;
 };
 
 type OutOfOrderDocument = Document & {
   qProcessOOOS?: (doc: Document) => void;
-  qProcessVNodeData?: (doc: Document) => void;
 };
 
 type OutOfOrderGlobal = typeof globalThis & {
@@ -41,10 +39,7 @@ export const installOutOfOrderExecutor = (doc: Document) => {
 
   const process = () => {
     const executorDoc = doc as OutOfOrderDocument;
-    const processOOOS = executorDoc.qProcessOOOS || executorDoc.qProcessVNodeData;
-    if (processOOOS) {
-      processOOOS(executorDoc);
-    }
+    executorDoc.qProcessOOOS?.(executorDoc);
   };
 
   const getScope = (): OutOfOrderScope => {
@@ -215,7 +210,6 @@ export const installOutOfOrderExecutor = (doc: Document) => {
     }
     flush(currentGroup);
   };
-  qO.p = process;
   qO.d = doc;
 
   (globalThis as OutOfOrderGlobal).qO = qO;

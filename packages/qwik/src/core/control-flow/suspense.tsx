@@ -263,14 +263,12 @@ async function emitRenderedOutOfOrderSegment(
   rendered: Awaited<ReturnType<SSRContainer['segment']>>,
   revealBoundary: OutOfOrderRevealBoundary | null
 ): Promise<void> {
-  const scriptFlush = await ssr.$runQueuedRenderBeforeRootState$(async () => {
+  await ssr.$runQueuedRenderBeforeRootState$(async () => {
     writeOutOfOrderResolvedTemplate(ssr, boundaryId, rendered.html, revealBoundary);
+    ssr.emitOutOfOrderSegmentScripts(rendered.scripts);
     ssr.emitInlineScript(`qO(${boundaryId})`);
-    const scriptFlush = ssr.emitOutOfOrderSegmentScripts(rendered.scripts);
     await ssr.streamHandler.flush();
-    return scriptFlush;
   });
-  await scriptFlush;
 }
 
 function shouldRenderFallback(

@@ -140,7 +140,7 @@ export interface SSRContainer extends Container {
     sourceEffects?: Map<string | symbol, Set<EffectSubscription>>
   ): void;
   nextOutOfOrderId(): number;
-  emitOutOfOrderSegmentScripts(scripts: string): ValueOrPromise<void>;
+  emitOutOfOrderSegmentScripts(scripts: string): void;
   segment(
     segmentId: string,
     jsx: JSXOutput,
