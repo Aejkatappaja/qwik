@@ -27,8 +27,8 @@ import {
   QWIK_JSX_DEV_RUNTIME_ID,
   QWIK_JSX_RUNTIME_ID,
   TRANSFORM_REGEX,
+  ExperimentalFeatures,
   createQwikPlugin,
-  type ExperimentalFeatures,
   type NormalizedQwikPluginOptions,
   type QwikBuildMode,
   type QwikBuildTarget,
@@ -312,6 +312,10 @@ export function qwikVite(qwikViteOpts: QwikVitePluginOptions = {}): any {
           [qDevKey]: qDev,
           [qInspectorKey]: qInspector,
           [qTestKey]: JSON.stringify(process.env.NODE_ENV === 'test'),
+          // The optimizer replaces __EXPERIMENTAL__.x while transforming source files.
+          // Library-built Qwik dist keeps those checks unbaked, so app bundling needs
+          // the same defines for prebuilt core modules that Vite includes directly.
+          ...getExperimentalFeatureDefines(opts.experimental),
         },
       };
 
@@ -364,6 +368,7 @@ export function qwikVite(qwikViteOpts: QwikVitePluginOptions = {}): any {
         } else {
           // Test Build
           updatedViteConfig.define = {
+            ...updatedViteConfig.define,
             [qDevKey]: true,
             [qTestKey]: true,
             [qInspectorKey]: false,
@@ -897,6 +902,18 @@ async function checkExternals() {
       },
     },
   } as const satisfies VitePlugin<never>;
+}
+
+function getExperimentalFeatureDefines(
+  experimental: NormalizedQwikPluginOptions['experimental']
+): Record<string, string> {
+  const defines: Record<string, string> = {};
+  const features = Object.values(ExperimentalFeatures) as (keyof typeof ExperimentalFeatures)[];
+  for (let i = 0; i < features.length; i++) {
+    const feature = features[i];
+    defines[`__EXPERIMENTAL__.${feature}`] = JSON.stringify(!!experimental?.[feature]);
+  }
+  return defines;
 }
 
 const ANSI_COLOR = {

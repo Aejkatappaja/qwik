@@ -3,7 +3,12 @@ import type { Rollup } from 'vite';
 import { assert, describe, test } from 'vitest';
 import { normalizePath } from '../../../qwik/src/testing/util';
 import type { OptimizerOptions } from '../types';
-import { qwikVite, type QwikVitePlugin, type QwikVitePluginOptions } from './vite';
+import {
+  ExperimentalFeatures,
+  qwikVite,
+  type QwikVitePlugin,
+  type QwikVitePluginOptions,
+} from './vite';
 
 const cwd = process.cwd();
 
@@ -57,6 +62,7 @@ const excludeDeps = [
 
 const getPlugin = (opts: QwikVitePluginOptions | undefined) =>
   (qwikVite(opts) as any)[0] as QwikVitePlugin;
+const experimentalDefineKey = (feature: ExperimentalFeatures) => `__EXPERIMENTAL__.${feature}`;
 
 // undefined for Vite 5 - 6, an object for Vite 7
 const configHookPluginContext = undefined as any;
@@ -107,8 +113,38 @@ test('command: serve, mode: development', async () => {
   assert.deepEqual(build.ssr, undefined);
   assert.deepEqual(c.optimizeDeps?.include, includeDeps);
   assert.deepEqual(c.optimizeDeps?.exclude, excludeDeps);
+  assert.deepEqual(c.define?.[experimentalDefineKey(ExperimentalFeatures.suspense)], 'false');
 
   assert.deepEqual(c.ssr?.noExternal, noExternal);
+});
+
+test('defines experimental feature replacements', async () => {
+  const initOpts = {
+    optimizerOptions: mockOptimizerOptions(),
+    experimental: [ExperimentalFeatures.suspense],
+  };
+  const plugin = getPlugin(initOpts);
+  const c = (await plugin.config.call(
+    configHookPluginContext,
+    {},
+    { command: 'build', mode: 'production' }
+  ))!;
+
+  assert.deepEqual(c.define?.[experimentalDefineKey(ExperimentalFeatures.suspense)], 'true');
+  assert.deepEqual(c.define?.[experimentalDefineKey(ExperimentalFeatures.each)], 'false');
+
+  const testPlugin = getPlugin(initOpts);
+  const testConfig = (await testPlugin.config.call(
+    configHookPluginContext,
+    {},
+    { command: 'serve', mode: 'test' }
+  ))!;
+
+  assert.deepEqual(
+    testConfig.define?.[experimentalDefineKey(ExperimentalFeatures.suspense)],
+    'true'
+  );
+  assert.deepEqual(testConfig.define?.[experimentalDefineKey(ExperimentalFeatures.each)], 'false');
 });
 
 test('command: serve, mode: production', async () => {
