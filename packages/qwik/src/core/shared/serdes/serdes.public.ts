@@ -57,8 +57,7 @@ export function getObjectById(id: number | string, stateData: unknown[]): unknow
 export function _createDeserializeContainer(stateData: unknown[]): DeserializeContainer {
   // eslint-disable-next-line prefer-const
   let state: unknown[];
-  let container!: DeserializeContainer;
-  container = {
+  const container: DeserializeContainer = {
     $getObjectById$: (id: number | string) => getObjectById(id, state),
     $getForwardRef$: (id: number | string) => container.$forwardRefs$?.[Number(id)],
     getSyncFn: (_: number) => {

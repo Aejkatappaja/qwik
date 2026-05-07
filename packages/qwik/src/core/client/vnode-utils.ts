@@ -787,10 +787,10 @@ export const vnode_locate = (rootVNode: ElementVNode, id: string | Element): VNo
   ensureElementVNode(rootVNode);
   let vNode: VNode | Element = rootVNode;
   const containerElement = rootVNode.node as ContainerElement;
-  let qVNodeRefs = containerElement.qVNodeRefs;
+  const qVNodeRefs = containerElement.qVNodeRefs;
   let elementOffset: number = -1;
   let refElement: Element | VNode;
-  let localId = typeof id === 'string' ? id : '';
+  const localId = typeof id === 'string' ? id : '';
   if (typeof id === 'string') {
     isDev && assertDefined(qVNodeRefs, 'Missing qVNodeRefs.');
     elementOffset = parseInt(localId);

@@ -109,16 +109,12 @@ export const installOutOfOrderExecutor = (doc: Document) => {
   };
 
   const move = (scope: OutOfOrderScope, boundaryId: number, resolved: OutOfOrderTemplate) => {
-    let placeholder: OutOfOrderTemplate;
-    let content: Element | null;
-    let parent: Node | null;
-
     if (!resolved) {
       return null;
     }
-    content = getResultParent(scope, boundaryId);
-    placeholder = content ? getPlaceholderTemplate(content, boundaryId) : null;
-    parent = placeholder ? placeholder.parentNode : null;
+    const content = getResultParent(scope, boundaryId);
+    const placeholder = content ? getPlaceholderTemplate(content, boundaryId) : null;
+    const parent = placeholder ? placeholder.parentNode : null;
     if (!placeholder || !content || !parent) {
       return null;
     }
@@ -190,23 +186,19 @@ export const installOutOfOrderExecutor = (doc: Document) => {
   const qO = ((boundaryId: number) => {
     const scope = getScope();
     const resolved = getResolvedTemplate(scope, boundaryId);
-    let entry: OutOfOrderEntry | null;
-    let groupId: string | null;
-    let currentGroup: OutOfOrderGroup;
-    let index: number;
 
     if (!resolved) {
       return;
     }
-    entry = move(scope, boundaryId, resolved);
+    const entry = move(scope, boundaryId, resolved);
     if (!entry) {
       return;
     }
     process();
-    groupId = resolved.getAttribute(Q_GROUP_ATTR);
+    const groupId = resolved.getAttribute(Q_GROUP_ATTR);
     if (groupId) {
-      index = +(resolved.getAttribute(Q_INDEX_ATTR) || 0);
-      currentGroup = group(scope, groupId, -1, resolved.getAttribute(Q_ORDER_ATTR) || 'p');
+      const index = +(resolved.getAttribute(Q_INDEX_ATTR) || 0);
+      const currentGroup = group(scope, groupId, -1, resolved.getAttribute(Q_ORDER_ATTR) || 'p');
       currentGroup.r[index] = entry;
       flush(currentGroup);
       return;

@@ -56,42 +56,54 @@ const escapeHtml = (value: string): string =>
 const escapeAttr = (value: string): string =>
   escapeHtml(value).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
+// WebKit buffers streamed HTML until enough early body content is emitted.
+// https://bugs.webkit.org/show_bug.cgi?id=265386
+const WEBKIT_STREAMING_FLUSH = '\u200b'.repeat(512);
+
 export const OutOfOrderSuspenseRoot = component$(() => {
   const shellCount = useSignal(0);
   const url = useServerData<string>('url');
   const scenario = getSearchParam(url, 'scenario');
+  const webkitFlush = getSearchParam(url, 'webkitFlush') === '1';
 
   return (
-    <main>
-      <h1 id="ooos-title">OOOS Suspense</h1>
-      {scenario === 'multiple' ? (
-        <MultipleOutOfOrderSuspense />
-      ) : scenario === 'cross-state' ? (
-        <CrossStateOutOfOrderSuspense />
-      ) : scenario === 'reveal' ? (
-        <RevealOutOfOrderSuspense />
-      ) : scenario === 'containers' ? (
-        <OutOfOrderSuspenseContainers />
-      ) : scenario === 'container' ? (
-        <OutOfOrderSuspenseContainerFragment />
-      ) : scenario === 'rerender' ? (
-        <OutOfOrderSuspenseRerender />
-      ) : (
-        <Suspense fallback={<FallbackOutOfOrderContent />}>
-          <SlowOutOfOrderContent />
-        </Suspense>
-      )}
-      <ManualOutOfOrderReleaseButton
-        id="ooos-default-release"
-        label="Resolve default suspense"
-        releaseParam="release"
-      />
-      <button id="ooos-shell-button" onClick$={() => shellCount.value++}>
-        Touch shell
-      </button>
-      <span id="ooos-shell-count">{shellCount.value}</span>
-      <footer id="ooos-footer">Footer shell</footer>
-    </main>
+    <>
+      {webkitFlush ? (
+        <div aria-hidden="true" style="width:0px;height:0px;overflow:hidden">
+          {WEBKIT_STREAMING_FLUSH}
+        </div>
+      ) : null}
+      <main>
+        <h1 id="ooos-title">OOOS Suspense</h1>
+        {scenario === 'multiple' ? (
+          <MultipleOutOfOrderSuspense />
+        ) : scenario === 'cross-state' ? (
+          <CrossStateOutOfOrderSuspense />
+        ) : scenario === 'reveal' ? (
+          <RevealOutOfOrderSuspense />
+        ) : scenario === 'containers' ? (
+          <OutOfOrderSuspenseContainers />
+        ) : scenario === 'container' ? (
+          <OutOfOrderSuspenseContainerFragment />
+        ) : scenario === 'rerender' ? (
+          <OutOfOrderSuspenseRerender />
+        ) : (
+          <Suspense fallback={<FallbackOutOfOrderContent />}>
+            <SlowOutOfOrderContent />
+          </Suspense>
+        )}
+        <ManualOutOfOrderReleaseButton
+          id="ooos-default-release"
+          label="Resolve default suspense"
+          releaseParam="release"
+        />
+        <button id="ooos-shell-button" onClick$={() => shellCount.value++}>
+          Touch shell
+        </button>
+        <span id="ooos-shell-count">{shellCount.value}</span>
+        <footer id="ooos-footer">Footer shell</footer>
+      </main>
+    </>
   );
 });
 
@@ -185,7 +197,7 @@ export const SlowOutOfOrderContent = component$(() => {
   const requestId = useServerData<string>('ooosRequestId');
   if (isServer) {
     const releaseId = getSearchParam(url, 'release');
-    if (releaseId) {
+    if (releaseId && requestId) {
       return waitForOutOfOrderRelease(requestId, releaseId, <ResolvedOutOfOrderContent />);
     }
     const params = url ? new URL(url).searchParams : null;
@@ -338,7 +350,7 @@ export const RerenderOutOfOrderContent = component$((props: { value: number }) =
   const requestId = useServerData<string>('ooosRequestId');
   if (isServer) {
     const releaseId = getSearchParam(url, 'rerender');
-    if (releaseId) {
+    if (releaseId && requestId) {
       return waitForOutOfOrderRelease(
         requestId,
         releaseId,
@@ -377,7 +389,7 @@ export const ControlledOutOfOrderContent = component$<ControlledOutOfOrderConten
   const requestId = useServerData<string>('ooosRequestId');
   if (isServer) {
     const releaseId = getSearchParam(url, props.releaseParam);
-    if (releaseId) {
+    if (releaseId && requestId) {
       return waitForOutOfOrderRelease(
         requestId,
         releaseId,
@@ -438,7 +450,7 @@ export const CrossStateContent = component$<{ shared: Signal<number> }>((props) 
   const requestId = useServerData<string>('ooosRequestId');
   if (isServer) {
     const releaseId = getSearchParam(url, 'cross');
-    if (releaseId) {
+    if (releaseId && requestId) {
       return waitForOutOfOrderRelease(
         requestId,
         releaseId,

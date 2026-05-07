@@ -1,17 +1,33 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
+
+const assertNoBrowserErrors = (page: Page) => {
+  page.on('pageerror', (err) => expect(err).toEqual(undefined));
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') {
+      expect(msg.text()).toEqual(undefined);
+    }
+  });
+};
+
+const getOutOfOrderSuspenseUrl = (browserName: string, searchParams?: URLSearchParams): string => {
+  const params = new URLSearchParams(searchParams);
+  if (browserName === 'webkit') {
+    params.set('webkitFlush', '1');
+  }
+  const search = params.toString();
+  return search ? `/e2e/suspense-ooos?${search}` : '/e2e/suspense-ooos';
+};
 
 test.describe('out-of-order suspense streaming', () => {
   test.beforeEach(async ({ page }) => {
-    page.on('pageerror', (err) => expect(err).toEqual(undefined));
-    page.on('console', (msg) => {
-      if (msg.type() === 'error') {
-        expect(msg.text()).toEqual(undefined);
-      }
-    });
+    assertNoBrowserErrors(page);
   });
 
-  test('streams fallback, swaps resolved content, and keeps both interactive', async ({ page }) => {
-    const navigation = page.goto('/e2e/suspense-ooos', { waitUntil: 'commit' });
+  test('streams fallback, swaps resolved content, and keeps both interactive', async ({
+    page,
+    browserName,
+  }) => {
+    const navigation = page.goto(getOutOfOrderSuspenseUrl(browserName), { waitUntil: 'commit' });
 
     await expect(page.locator('#ooos-title')).toBeVisible({ timeout: 10000 });
     await expect(page.locator('#ooos-fallback')).toBeVisible({ timeout: 10000 });
@@ -36,11 +52,13 @@ test.describe('out-of-order suspense streaming', () => {
 
   test('keeps the streamed shell interactive while suspense content is pending', async ({
     page,
+    browserName,
   }, testInfo) => {
     const releaseId = `pending-shell-${testInfo.workerIndex}-${Date.now()}`;
-    const navigation = page.goto(`/e2e/suspense-ooos?release=${releaseId}`, {
-      waitUntil: 'commit',
-    });
+    const navigation = page.goto(
+      getOutOfOrderSuspenseUrl(browserName, new URLSearchParams({ release: releaseId })),
+      { waitUntil: 'commit' }
+    );
 
     await expect(page.locator('#ooos-title')).toBeVisible({ timeout: 10000 });
     await expect(page.locator('#ooos-fallback')).toBeVisible({ timeout: 10000 });
@@ -66,6 +84,7 @@ test.describe('out-of-order suspense streaming', () => {
 
   test('streams and resolves multiple suspense boundaries independently', async ({
     page,
+    browserName,
   }, testInfo) => {
     const firstReleaseId = `multi-first-${testInfo.workerIndex}-${Date.now()}`;
     const secondReleaseId = `multi-second-${testInfo.workerIndex}-${Date.now()}`;
@@ -74,7 +93,9 @@ test.describe('out-of-order suspense streaming', () => {
       multiFirst: firstReleaseId,
       multiSecond: secondReleaseId,
     });
-    const navigation = page.goto(`/e2e/suspense-ooos?${params}`, { waitUntil: 'commit' });
+    const navigation = page.goto(getOutOfOrderSuspenseUrl(browserName, params), {
+      waitUntil: 'commit',
+    });
 
     await expect(page.locator('#ooos-title')).toBeVisible({ timeout: 10000 });
     await expect(page.locator('#ooos-multi-first-fallback')).toBeVisible({ timeout: 10000 });
@@ -119,13 +140,16 @@ test.describe('out-of-order suspense streaming', () => {
 
   test('shares root state between fallback and resolved suspense content', async ({
     page,
+    browserName,
   }, testInfo) => {
     const releaseId = `cross-state-${testInfo.workerIndex}-${Date.now()}`;
     const params = new URLSearchParams({
       scenario: 'cross-state',
       cross: releaseId,
     });
-    const navigation = page.goto(`/e2e/suspense-ooos?${params}`, { waitUntil: 'commit' });
+    const navigation = page.goto(getOutOfOrderSuspenseUrl(browserName, params), {
+      waitUntil: 'commit',
+    });
 
     await expect(page.locator('#ooos-title')).toBeVisible({ timeout: 10000 });
     await expect(page.locator('#ooos-cross-fallback')).toBeVisible({ timeout: 10000 });
@@ -157,6 +181,7 @@ test.describe('out-of-order suspense streaming', () => {
 
   test('coordinates out-of-order suspense boundaries inside collapsed reveal', async ({
     page,
+    browserName,
   }, testInfo) => {
     const firstReleaseId = `reveal-first-${testInfo.workerIndex}-${Date.now()}`;
     const secondReleaseId = `reveal-second-${testInfo.workerIndex}-${Date.now()}`;
@@ -165,7 +190,9 @@ test.describe('out-of-order suspense streaming', () => {
       revealFirst: firstReleaseId,
       revealSecond: secondReleaseId,
     });
-    const navigation = page.goto(`/e2e/suspense-ooos?${params}`, { waitUntil: 'commit' });
+    const navigation = page.goto(getOutOfOrderSuspenseUrl(browserName, params), {
+      waitUntil: 'commit',
+    });
 
     await expect(page.locator('#ooos-title')).toBeVisible({ timeout: 10000 });
     await expect(page.locator('#ooos-reveal-first-fallback')).toBeVisible({ timeout: 10000 });
@@ -195,13 +222,16 @@ test.describe('out-of-order suspense streaming', () => {
 
   test('keeps vnode structure stable when resolved suspense content is keyed rerendered', async ({
     page,
+    browserName,
   }, testInfo) => {
     const releaseId = `rerender-${testInfo.workerIndex}-${Date.now()}`;
     const params = new URLSearchParams({
       scenario: 'rerender',
       rerender: releaseId,
     });
-    const navigation = page.goto(`/e2e/suspense-ooos?${params}`, { waitUntil: 'commit' });
+    const navigation = page.goto(getOutOfOrderSuspenseUrl(browserName, params), {
+      waitUntil: 'commit',
+    });
 
     await expect(page.locator('#ooos-title')).toBeVisible({ timeout: 10000 });
     await expect(page.locator('#ooos-rerender-fallback')).toBeVisible({ timeout: 10000 });
@@ -228,7 +258,10 @@ test.describe('out-of-order suspense streaming', () => {
     await navigation;
   });
 
-  test('keeps out-of-order swaps scoped to streamed containers', async ({ page }, testInfo) => {
+  test('keeps out-of-order swaps scoped to streamed containers', async ({
+    page,
+    browserName,
+  }, testInfo) => {
     const firstReleaseId = `container-first-${testInfo.workerIndex}-${Date.now()}`;
     const secondReleaseId = `container-second-${testInfo.workerIndex}-${Date.now()}`;
     const params = new URLSearchParams({
@@ -236,7 +269,9 @@ test.describe('out-of-order suspense streaming', () => {
       first: firstReleaseId,
       second: secondReleaseId,
     });
-    const navigation = page.goto(`/e2e/suspense-ooos?${params}`, { waitUntil: 'commit' });
+    const navigation = page.goto(getOutOfOrderSuspenseUrl(browserName, params), {
+      waitUntil: 'commit',
+    });
 
     await expect(page.locator('#ooos-container-first-fallback')).toBeVisible({ timeout: 10000 });
     await expect(page.locator('#ooos-container-first-resolved')).toHaveCount(0);
