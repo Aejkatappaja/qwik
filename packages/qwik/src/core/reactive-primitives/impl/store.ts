@@ -1,4 +1,5 @@
 import { pad, qwikDebugToString } from '../../debug';
+import { qTest } from '../../shared/utils/qdev';
 import { assertTrue } from '../../shared/error/assert';
 import { tryGetInvokeContext } from '../../use/use-core';
 import { isObject, isSerializableObject } from '../../shared/utils/types';
@@ -266,7 +267,7 @@ export function addStoreEffect(
   // Let's make sure that we have a reference to this effect.
   // Adding reference is essentially adding a subscription, so if the signal
   // changes we know who to notify.
-  const isOnServer = import.meta.env.TEST ? isServerPlatform() : isServer;
+  const isOnServer = qTest ? isServerPlatform() : isServer;
   const shouldRecordExternalRootEffect =
     __EXPERIMENTAL__.suspense && store instanceof StoreHandler && isOnServer;
   ensureContainsSubscription(effects, effectSubscription);

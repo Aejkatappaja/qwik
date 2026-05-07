@@ -3,7 +3,7 @@ import { pad, qwikDebugToString } from '../../debug';
 import { assertTrue } from '../../shared/error/assert';
 import { qError, QError } from '../../shared/error/error';
 import type { Container } from '../../shared/types';
-import { qDev } from '../../shared/utils/qdev';
+import { qDev, qTest } from '../../shared/utils/qdev';
 import { tryGetInvokeContext } from '../../use/use-core';
 import {
   addQrlToSerializationCtx,
@@ -78,7 +78,7 @@ export class SignalImpl<T = any> implements Signal<T> {
       // Let's make sure that we have a reference to this effect.
       // Adding reference is essentially adding a subscription, so if the signal
       // changes we know who to notify.
-      const isOnServer = import.meta.env.TEST ? isServerPlatform() : isServer;
+      const isOnServer = qTest ? isServerPlatform() : isServer;
       const effects = (this.$effects$ ||= new Set());
       const shouldRecordExternalRootEffect = __EXPERIMENTAL__.suspense && isOnServer;
       ensureContainsSubscription(effects, effectSubscriber);
