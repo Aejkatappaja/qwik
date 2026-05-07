@@ -85,7 +85,7 @@ export class Serializer {
     }
   }
 
-  async serializePatch(): Promise<void> {
+  async serializePatch(extraRootId?: number | string): Promise<void> {
     const rootStart = this.$rootIdx$;
     const previousStreamedRootLimit = this.$streamedRootLimit$;
     this.$streamedRootLimit$ = rootStart;
@@ -97,9 +97,21 @@ export class Serializer {
       await this.outputPendingRoots();
       this.$writer$.write(BRACKET_CLOSE);
       const forwardRefs = this.getForwardRefsPayload();
-      if (forwardRefs) {
+      if (forwardRefs || extraRootId !== undefined) {
         this.$writer$.write(COMMA);
-        this.outputForwardRefsArray(forwardRefs);
+        if (forwardRefs) {
+          this.outputForwardRefsArray(forwardRefs);
+        } else {
+          this.$writer$.write('0');
+        }
+      }
+      if (extraRootId !== undefined) {
+        this.$writer$.write(COMMA);
+        if (typeof extraRootId === 'number') {
+          this.$writer$.write(String(extraRootId));
+        } else {
+          this.outputString(extraRootId);
+        }
       }
     } finally {
       this.$streamedRootLimit$ = previousStreamedRootLimit;

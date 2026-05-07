@@ -1,5 +1,6 @@
 import type { FunctionComponent, JSXNodeInternal } from '../shared/jsx/types/jsx-node';
 import type { ValueOrPromise } from '../shared/utils/types';
+import type { StackValue } from './ssr-render-jsx';
 import type { SSRContainer, SSRRenderJSXOptions } from './ssr-types';
 
 const InternalServerComponentSymbol = Symbol('qInternalServerComponent');
@@ -8,7 +9,8 @@ const InternalServerComponentSymbol = Symbol('qInternalServerComponent');
 export type InternalServerComponentHandler = (
   ssr: SSRContainer,
   jsx: JSXNodeInternal,
-  options: SSRRenderJSXOptions
+  options: SSRRenderJSXOptions,
+  enqueue: (value: StackValue) => void
 ) => ValueOrPromise<void>;
 
 /** @internal */

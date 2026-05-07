@@ -1032,10 +1032,11 @@ describe('renderToStream: out-of-order Suspense', () => {
     resolveSlow(<section>Done</section>);
     await renderPromise;
     const html = chunks.join('');
-    expect(html).toContain('<!--q:sus=1-->');
-    expect(html).toContain('<div q:f="1" style="display:contents"');
-    expect(html).toContain('<div q:r="1" style="display:none"');
-    expect(html).toContain('<!--/q:sus=1-->');
+    expect(html).not.toContain('q:sus');
+    expect(html).not.toContain('q:f=');
+    expect(html).toContain('<div style="display:contents"');
+    expect(html).toContain('q:rp="1"');
+    expect(html).toContain('<template q:r="1"></template>');
     expect(html).toContain('<template q:r="1">');
     expect(html).toContain('qO(1)');
     expect(html).toContain('Done');
@@ -1053,7 +1054,7 @@ describe('renderToStream: out-of-order Suspense', () => {
     expect(contentHost.style.display).toBe('contents');
   });
 
-  it('should stream resolved HTML before root state and segment scripts after it', async () => {
+  it('should stream resolved HTML and segment vnode data before root state when ready early', async () => {
     let resolveSlow!: (value: JSXOutput) => void;
     let releaseFirstFlush!: () => void;
     let flushes = 0;
@@ -1104,13 +1105,14 @@ describe('renderToStream: out-of-order Suspense', () => {
     const html = chunks.join('');
     const resolvedHtmlIndex = html.indexOf('<template q:r="1">');
     const swapIndex = html.indexOf('qO(1)');
+    const segmentVnodeIndex = html.indexOf('type="qwik/vnode" q:r="1"');
     const rootStateIndex = html.indexOf('type="qwik/state"');
-    const segmentStateIndex = html.indexOf('q:s="s1"');
 
     expect(resolvedHtmlIndex).toBeGreaterThan(-1);
     expect(swapIndex).toBeGreaterThan(resolvedHtmlIndex);
-    expect(rootStateIndex).toBeGreaterThan(swapIndex);
-    expect(segmentStateIndex).toBeGreaterThan(rootStateIndex);
+    expect(segmentVnodeIndex).toBeGreaterThan(swapIndex);
+    expect(rootStateIndex).toBeGreaterThan(segmentVnodeIndex);
+    expect(html).not.toContain('q:patch');
   });
 
   it('should emit compact segment vnode attributes', async () => {
@@ -1146,8 +1148,9 @@ describe('renderToStream: out-of-order Suspense', () => {
     resolveSlow(<button onClick$={() => undefined}>Resolved</button>);
     await renderPromise;
     const html = chunks.join('');
-    expect(html).not.toContain('q:s="f1"');
-    expect(html).toContain('q:s="s1"');
+    expect(html).not.toContain('q:s=');
+    expect(html).toContain('type="qwik/vnode" q:r="1"');
+    expect(html).not.toContain('type="qwik/vnode" q:r="1" q:o=');
     expect(html).not.toContain('q:segment');
     expect(html).not.toContain('q:suspense');
   });
@@ -1271,7 +1274,8 @@ describe('renderToStream: out-of-order Suspense', () => {
       const segmentStateScript = document.querySelector('script[type="qwik/state"][q\\:patch]');
       expect(segmentStateScript).not.toBeNull();
       expect(segmentStateScript?.hasAttribute('q:s')).toBe(false);
-      expect(segmentStateScript?.getAttribute('q:fx')).toBeNull();
+      expect(segmentStateScript?.getAttribute('q:r')).toBe('1');
+      expect(segmentStateScript?.hasAttribute('q:fx')).toBe(false);
       expect(document.querySelector('#ooos-unit-shared-resolved-button')).not.toBeNull();
 
       emulateExecutionOfQwikFuncs(document);
@@ -1359,7 +1363,9 @@ describe('renderToStream: out-of-order Suspense', () => {
       // eslint-disable-next-line no-new-func
       new Function('document', scripts.join('\n'))(document);
       const segmentStateScript = document.querySelector('script[type="qwik/state"][q\\:patch]');
-      expect(segmentStateScript?.getAttribute('q:fx')).not.toBeNull();
+      expect(segmentStateScript?.getAttribute('q:r')).toBe('1');
+      expect(segmentStateScript?.hasAttribute('q:fx')).toBe(false);
+      expect(JSON.parse(segmentStateScript!.textContent!)[3]).toBeDefined();
       expect(segmentStateScript?.hasAttribute('q:s')).toBe(false);
       expect(document.querySelector('#ooos-unit-store-resolved-button')).not.toBeNull();
 
@@ -1470,9 +1476,14 @@ describe('renderToStream: out-of-order Suspense', () => {
       // eslint-disable-next-line no-new-func
       new Function('document', scripts.join('\n'))(document);
       const segmentStateScripts = document.querySelectorAll(
-        'script[type="qwik/state"][q\\:patch][q\\:fx]'
+        'script[type="qwik/state"][q\\:patch][q\\:r]'
       );
       expect(segmentStateScripts.length).toBe(2);
+      for (let i = 0; i < segmentStateScripts.length; i++) {
+        const script = segmentStateScripts[i];
+        expect(script.hasAttribute('q:fx')).toBe(false);
+        expect(JSON.parse(script.textContent!)[3]).toBeDefined();
+      }
       expect(document.querySelector('#ooos-unit-shared-store-first-button')).not.toBeNull();
       expect(document.querySelector('#ooos-unit-shared-store-second-count')).not.toBeNull();
 
@@ -1582,7 +1593,8 @@ describe('renderToStream: out-of-order Suspense', () => {
       new Function('document', scripts.join('\n'))(document);
       const segmentStateScripts = document.querySelectorAll('script[type="qwik/state"][q\\:patch]');
       expect(segmentStateScripts.length).toBeGreaterThan(0);
-      for (const script of segmentStateScripts) {
+      for (let i = 0; i < segmentStateScripts.length; i++) {
+        const script = segmentStateScripts[i];
         expect(script.hasAttribute('q:s')).toBe(false);
       }
       expect(document.querySelector('#ooos-unit-cross-store-first-button')).not.toBeNull();
@@ -1658,9 +1670,13 @@ describe('renderToStream: out-of-order Suspense', () => {
     await vi.waitFor(() => expect(chunks.join('')).toContain('First fallback'));
     await vi.waitFor(() => expect(chunks.join('')).toContain('Footer'));
     const shellDocument = createDocument({ html: chunks.join('') });
-    const shellFallbackHosts = shellDocument.querySelectorAll('[q\\:f]');
-    expect((shellFallbackHosts[0] as HTMLElement).style.display).toBe('contents');
-    expect((shellFallbackHosts[1] as HTMLElement).style.display).toBe('none');
+    const shellFallbackHosts = ['First fallback', 'Second fallback'].map(
+      (text) =>
+        Array.from(shellDocument.querySelectorAll('p')).find((node) => node.textContent === text)!
+          .parentElement as HTMLElement
+    );
+    expect(shellFallbackHosts[0].style.display).toBe('contents');
+    expect(shellFallbackHosts[1].style.display).toBe('none');
 
     resolveSecond(<p>Second done</p>);
     await delay(40);
@@ -1668,8 +1684,8 @@ describe('renderToStream: out-of-order Suspense', () => {
     expect(secondReadyHtml).toContain('Second done');
     expect(secondReadyHtml).toContain('qO(2)');
     expect(secondReadyHtml).toContain('qO.g(1,2,"s")');
-    expect(secondReadyHtml).toContain('q:f="1" q:g="1" q:i="0" q:o="s" q:c');
-    expect(secondReadyHtml).toContain('q:f="2" q:g="1" q:i="1" q:o="s" q:c');
+    expect(secondReadyHtml).toContain('<template q:r="2" q:g="1" q:i="1" q:o="s" q:c');
+    expect(secondReadyHtml).not.toContain('q:f=');
 
     const runOutOfOrderScripts = (html: string) => {
       const document = createDocument({ html });
@@ -1684,7 +1700,13 @@ describe('renderToStream: out-of-order Suspense', () => {
 
     const secondReadyDocument = runOutOfOrderScripts(secondReadyHtml);
     expect(secondReadyDocument.querySelector('main')!.textContent).toContain('First fallback');
-    expect(secondReadyDocument.querySelector('main')!.textContent).not.toContain('Second done');
+    expect(
+      (
+        Array.from(secondReadyDocument.querySelectorAll('p')).find(
+          (node) => node.textContent === 'Second done'
+        )!.parentElement as HTMLElement
+      ).style.display
+    ).toBe('none');
     expect(
       (
         Array.from(secondReadyDocument.querySelectorAll('p')).find(

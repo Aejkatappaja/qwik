@@ -5,7 +5,10 @@ import type { QRLInternal } from '../../server/qwik-types';
 import { assertTrue } from '../shared/error/assert';
 import { QError, qError } from '../shared/error/error';
 import { ERROR_CONTEXT, isRecoverable } from '../shared/error/error-handling';
-import { mergeExternalRootEffects } from '../control-flow/suspense-utils';
+import {
+  mergeExternalRootEffects,
+  type ExternalRootEffectsDelta,
+} from '../control-flow/suspense-utils';
 import type { QRL } from '../shared/qrl/qrl.public';
 import { wrapDeserializerProxy } from '../shared/serdes/deser-proxy';
 import { getObjectById, parseQRL, preprocessState } from '../shared/serdes/index';
@@ -26,7 +29,6 @@ import {
   QInstanceAttr,
   QLocaleAttr,
   QManifestHashAttr,
-  QSegmentEffectsAttr,
   QScopedStyle,
   QStatePatchAttrSelector,
   QStyle,
@@ -162,7 +164,6 @@ export class DomContainer extends _SharedContainer implements IClientContainer {
     el.qVNodeRefs = undefined;
     if (__EXPERIMENTAL__.suspense) {
       el.qSegmentVnodeData = undefined;
-      el.qSegmentVnodeOffsets = undefined;
     }
     el.removeAttribute(QContainerAttr);
     const document = el.ownerDocument as QDocument;
@@ -206,30 +207,30 @@ export class DomContainer extends _SharedContainer implements IClientContainer {
         continue;
       }
       this.$processedStatePatchScripts$.add(stateScript);
-      this.$processStatePatch$(
-        stateScript.textContent,
-        stateScript.getAttribute(QSegmentEffectsAttr)
-      );
+      this.$processStatePatch$(stateScript.textContent);
     }
   }
 
-  private $processStatePatch$(
-    textContent: string | null,
-    externalRootEffectsIndex: string | null
-  ): void {
+  private $processStatePatch$(textContent: string | null): void {
     if (!__EXPERIMENTAL__.suspense) {
       return;
     }
     if (textContent) {
-      const [rootStart, rawStateData, forwardRefs] = JSON.parse(textContent) as [
+      const [rootStart, rawStateData, forwardRefs, effectsDeltaId] = JSON.parse(textContent) as [
         number,
         unknown[],
-        Array<number | string> | undefined,
+        Array<number | string> | 0 | undefined,
+        number | string | undefined,
       ];
       this.$appendStatePatchRoots$(rootStart, rawStateData);
-      this.$mergeForwardRefs$(forwardRefs);
+      this.$mergeForwardRefs$(forwardRefs || undefined);
+      mergeExternalRootEffects(
+        this,
+        effectsDeltaId === undefined
+          ? undefined
+          : (this.$getObjectById$(effectsDeltaId) as ExternalRootEffectsDelta)
+      );
     }
-    mergeExternalRootEffects(this, this.$stateData$, externalRootEffectsIndex);
   }
 
   private $appendStatePatchRoots$(rootStart: number, rawStateData: unknown[]): void {

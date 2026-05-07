@@ -3,7 +3,6 @@ import type { Signal } from '../reactive-primitives/signal.public';
 import { createSignal } from '../reactive-primitives/signal.public';
 import { componentQrl } from '../shared/component.public';
 import { _jsxSorted } from '../shared/jsx/jsx-internal';
-import { Fragment } from '../shared/jsx/jsx-runtime';
 import { directGetPropsProxyProp } from '../shared/jsx/props-proxy';
 import { Slot } from '../shared/jsx/slot.public';
 import { isServerPlatform } from '../shared/platform/platform';
@@ -135,24 +134,14 @@ export const revealCmp = (props: RevealProps) => {
   if (__EXPERIMENTAL__.suspense && isServerEnv && isOutOfOrderStreaming()) {
     const coordinator = getOutOfOrderCoordinator(reveal);
     return /*#__PURE__*/ _jsxSorted(
-      Fragment,
+      SSRRevealSlot,
+      {
+        coordinator,
+      },
       null,
       null,
-      [
-        /*#__PURE__*/ _jsxSorted(Slot, null, null, null, 0, 'u7_0'),
-        /*#__PURE__*/ _jsxSorted(
-          SSRReveal,
-          {
-            coordinator,
-          },
-          null,
-          null,
-          0,
-          'u7_1'
-        ),
-      ],
-      1,
-      'u7_2'
+      0,
+      'u7_0'
     );
   }
 
@@ -164,21 +153,26 @@ export const Reveal = /*#__PURE__*/ componentQrl<RevealProps>(
   /*#__PURE__*/ inlinedQrl(revealCmp, '_reC')
 ) as typeof revealCmp;
 
-type SSRRevealProps = {
+type SSRRevealSlotProps = {
   coordinator: OutOfOrderRevealCoordinator;
 };
 
-const SSRReveal = __EXPERIMENTAL__.suspense
-  ? /*#__PURE__*/ createInternalServerComponent<SSRRevealProps>((ssr, jsx) => {
-      const coordinator = directGetPropsProxyProp<OutOfOrderRevealCoordinator, unknown>(
-        jsx,
-        'coordinator'
-      );
-      const script = coordinator.script();
-      if (!script) {
-        return;
+const SSRRevealSlot = __EXPERIMENTAL__.suspense
+  ? /*#__PURE__*/ createInternalServerComponent<SSRRevealSlotProps>(
+      (ssr, jsx, _options, enqueue) => {
+        const coordinator = directGetPropsProxyProp<OutOfOrderRevealCoordinator, unknown>(
+          jsx,
+          'coordinator'
+        );
+        enqueue(() => {
+          const script = coordinator.script();
+          if (!script) {
+            return;
+          }
+          ssr.emitOutOfOrderExecutorIfNeeded();
+          ssr.emitInlineScript(script);
+        });
+        enqueue(/*#__PURE__*/ _jsxSorted(Slot, null, null, null, 0, 'u7_0'));
       }
-      ssr.emitOutOfOrderExecutorIfNeeded();
-      ssr.emitInlineScript(script);
-    })
+    )
   : null!;

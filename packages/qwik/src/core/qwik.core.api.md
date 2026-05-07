@@ -71,6 +71,8 @@ export interface ClientContainer extends _Container {
     // (undocumented)
     $locale$: string;
     // (undocumented)
+    $processSegmentStateScripts$(): void;
+    // (undocumented)
     $setRawState$(id: number | string, vParent: _ElementVNode | _VirtualVNode, segmentId?: string | null): void;
     // (undocumented)
     document: _QDocument;
@@ -196,7 +198,6 @@ export interface _ContainerElement extends HTMLElement {
     // (undocumented)
     qContainer?: ClientContainer;
     qSegmentVnodeData?: Map<string, string>;
-    qSegmentVnodeOffsets?: Map<string, number>;
     qVnodeData?: string;
     qVNodeRefs?: Map<number, Element | _ElementVNode>;
 }
@@ -918,11 +919,11 @@ export interface ReadonlySignal<T = unknown> {
     readonly value: T;
 }
 
+// Warning: (ae-forgotten-export) The symbol "InternalServerComponent" needs to be exported by the entry point index.d.ts
+// Warning: (ae-forgotten-export) The symbol "SSRRevealSlotProps" needs to be exported by the entry point index.d.ts
+//
 // @internal (undocumented)
-export const _reC: (props: RevealProps) => JSXNodeInternal<FunctionComponent<    {
-children?: any;
-key?: string | number | null;
-}>> | JSXNodeInternal<FunctionComponent<    {
+export const _reC: (props: RevealProps) => JSXNodeInternal<InternalServerComponent<SSRRevealSlotProps>> | JSXNodeInternal<FunctionComponent<    {
 name?: string;
 children?: JSXChildren;
 }>>;
@@ -1258,14 +1259,11 @@ export class _SubscriptionData {
     data: NodePropData;
 }
 
-// Warning: (ae-forgotten-export) The symbol "InternalServerComponent" needs to be exported by the entry point index.d.ts
-// Warning: (ae-forgotten-export) The symbol "SSRSuspenseProps" needs to be exported by the entry point index.d.ts
-//
 // @internal (undocumented)
 export const _suC: (props: SuspenseProps) => JSXNodeInternal<FunctionComponent<    {
 children?: any;
 key?: string | number | null;
-}>> | JSXNodeInternal<InternalServerComponent<SSRSuspenseProps>>;
+}>>;
 
 // Warning: (ae-incompatible-release-tags) The symbol "Suspense" is marked as @public, but its signature references "_suC" which is marked as @internal
 //

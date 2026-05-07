@@ -40,18 +40,13 @@ export {
   QManifestHashAttr,
   QRenderAttr,
   QRuntimeAttr,
-  QSegmentAttr,
-  QSegmentEffectsAttr,
-  QSegmentOffsetAttr,
   QScopedStyle,
   QSlot,
   QSlotParent,
   QStatePatchAttr,
   QStyle,
-  QSuspense,
-  QSuspenseEnd,
-  QSuspenseFallback,
   QSuspenseResolved,
+  QSuspenseResultParent,
   QTemplate,
   QVersionAttr,
   Q_PROPS_SEPARATOR,
@@ -65,7 +60,11 @@ export {
   isClassAttr,
 } from '../core/shared/utils/scoped-styles';
 export { serializeAttribute } from '../core/shared/utils/styles';
-export { VNodeDataChar, VNodeDataSeparator } from '../core/shared/vnode-data-types';
+export {
+  VNodeDataChar,
+  VNodeDataSeparator,
+  getSegmentVNodeId,
+} from '../core/shared/vnode-data-types';
 export { preload } from '../core/preloader/queue';
 export { initPreloader } from '../core/preloader/bundle-graph';
 export { SsrNodeFlags } from '../core/shared/types';
@@ -76,7 +75,6 @@ export { ITERATION_ITEM_SINGLE, ITERATION_ITEM_MULTI } from '../core/shared/util
 export { isObjectEmpty } from '../core/shared/utils/objects';
 export type {
   OutOfOrderRevealBoundary,
-  OutOfOrderRevealBoundaryRegistration,
   OutOfOrderRevealCoordinator,
 } from '../core/control-flow/suspense-utils';
 export {

@@ -27,6 +27,9 @@ test.describe('out-of-order suspense streaming', () => {
 
     await page.locator('#ooos-resolved-button').click();
     await expect(page.locator('#ooos-resolved-count')).toHaveText('1');
+    await page.locator('#ooos-shell-button').click();
+    await expect(page.locator('#ooos-shell-count')).toHaveText('1');
+    await expect(page.locator('#ooos-footer')).toHaveText('Footer shell');
 
     await navigation;
   });
@@ -175,7 +178,7 @@ test.describe('out-of-order suspense streaming', () => {
     await expect(page.locator('#ooos-reveal-first-fallback')).toBeVisible();
     await expect(page.locator('#ooos-reveal-second-fallback')).toBeHidden();
     await expect(page.locator('#ooos-reveal-first-resolved')).toHaveCount(0);
-    await expect(page.locator('#ooos-reveal-second-resolved')).toHaveCount(0);
+    await expect(page.locator('#ooos-reveal-second-resolved')).toBeHidden();
 
     await page.locator('#ooos-reveal-first-release').click();
     await expect(page.locator('#ooos-reveal-first-resolved')).toBeVisible({ timeout: 10000 });

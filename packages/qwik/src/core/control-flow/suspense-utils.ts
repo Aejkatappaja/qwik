@@ -17,18 +17,12 @@ export const SUSPENSE_QRL_SYMBOL = '_suC';
 /** @internal */
 export type OutOfOrderRevealBoundary = {
   attrs: string;
-  props: Record<string, string | boolean>;
   showFallback: boolean;
 };
 
 /** @internal */
-export type OutOfOrderRevealBoundaryRegistration = {
-  register: () => OutOfOrderRevealBoundary;
-};
-
-/** @internal */
-export type ExternalRootEffectsPatch = Array<
-  [number, EffectSubscription[] | Array<[string | symbol, EffectSubscription[]]>]
+export type ExternalRootEffectsDelta = Array<
+  [number | string, null | string | [number | string], Array<number | string>]
 >;
 
 type OutOfOrderRevealOrderCode = 'p' | 's' | 'r' | 't';
@@ -48,27 +42,12 @@ export class OutOfOrderRevealCoordinator<ITEM extends RevealItemLike = RevealIte
     this.orderCode = getOutOfOrderRevealOrderCode(order);
   }
 
-  boundary(registration: RevealRegistrationLike<ITEM>): OutOfOrderRevealBoundaryRegistration {
-    return {
-      register: () => this.register(registration),
-    };
-  }
-
   register(registration: RevealRegistrationLike<ITEM>): OutOfOrderRevealBoundary {
     this.pendingItems.add(registration.item);
     const index = this.count++;
-    const props: Record<string, string | boolean> = {
-      'q:g': `${this.id}`,
-      'q:i': `${index}`,
-      'q:o': this.orderCode,
-    };
-    if (this.collapsed) {
-      props['q:c'] = true;
-    }
     return {
       attrs:
         ` q:g="${this.id}" q:i="${index}" q:o="${this.orderCode}"` + (this.collapsed ? ' q:c' : ''),
-      props,
       showFallback:
         canRevealRegistration(registration, (item) => this.pendingItems.has(item)) ||
         !this.collapsed,
@@ -122,31 +101,29 @@ export const isOutOfOrderStreaming = (): boolean => {
 };
 
 /** @internal */
+export const nextOutOfOrderSuspenseId = (): number => {
+  if (!__EXPERIMENTAL__.suspense) {
+    return 0;
+  }
+  const container = tryGetInvokeContext()?.$container$ as
+    | { nextOutOfOrderId?: () => number }
+    | undefined;
+  return container?.nextOutOfOrderId?.() ?? 0;
+};
+
+/** @internal */
 export const mergeExternalRootEffects = (
   container: Container,
-  segmentStateData: unknown[],
-  externalRootEffectsIndex: string | null
+  effectsDelta: ExternalRootEffectsDelta | undefined
 ): void => {
-  if (!__EXPERIMENTAL__.suspense || !externalRootEffectsIndex) {
+  if (!__EXPERIMENTAL__.suspense || !effectsDelta) {
     return;
   }
-  const patches = segmentStateData[Number(externalRootEffectsIndex)] as
-    | ExternalRootEffectsPatch
-    | undefined;
-  if (!patches) {
-    return;
-  }
-  for (let i = 0; i < patches.length; i++) {
-    const [rootId, patchEffects] = patches[i];
+  for (let i = 0; i < effectsDelta.length; i++) {
+    const [rootId, prop, effectIds] = effectsDelta[i];
     const root = container.$getObjectById$(rootId);
     if (root instanceof SignalImpl) {
-      mergeExternalRootEffectSet(
-        container,
-        root,
-        root,
-        (root.$effects$ ||= new Set()),
-        patchEffects as EffectSubscription[]
-      );
+      mergeExternalRootEffectSet(container, root, root, (root.$effects$ ||= new Set()), effectIds);
     } else {
       const handler = getStoreHandler(root as any);
       const target = getStoreTarget(root as any);
@@ -154,16 +131,16 @@ export const mergeExternalRootEffects = (
         continue;
       }
       const effectsMap = (handler.$effects$ ||= new Map());
-      for (const [prop, effects] of patchEffects as Array<
-        [string | symbol, EffectSubscription[]]
-      >) {
-        let rootEffects = effectsMap.get(prop);
-        if (!rootEffects) {
-          rootEffects = new Set();
-          effectsMap.set(prop, rootEffects);
-        }
-        mergeExternalRootEffectSet(container, handler, target, rootEffects, effects);
+      const storeProp = Array.isArray(prop) ? container.$getObjectById$(prop[0]) : prop;
+      if (storeProp === null) {
+        continue;
       }
+      let rootEffects = effectsMap.get(storeProp as string | symbol);
+      if (!rootEffects) {
+        rootEffects = new Set();
+        effectsMap.set(storeProp as string | symbol, rootEffects);
+      }
+      mergeExternalRootEffectSet(container, handler, target, rootEffects, effectIds);
     }
   }
 };
@@ -173,10 +150,11 @@ const mergeExternalRootEffectSet = (
   producer: unknown,
   backRef: unknown,
   rootEffects: Set<EffectSubscription>,
-  patchEffects: EffectSubscription[]
+  effectIds: Array<number | string>
 ): void => {
   let newEffects: Set<EffectSubscription> | undefined;
-  for (const effect of patchEffects) {
+  for (let i = 0; i < effectIds.length; i++) {
+    const effect = container.$getObjectById$(effectIds[i]) as EffectSubscription;
     if (!rootEffects.has(effect)) {
       rootEffects.add(effect);
       (newEffects ||= new Set()).add(effect);

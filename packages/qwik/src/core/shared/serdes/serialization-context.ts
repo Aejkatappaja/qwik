@@ -43,7 +43,7 @@ interface AddRootFn {
 }
 export interface SerializationContext {
   $serialize$: () => ValueOrPromise<void>;
-  $serializePatch$: () => ValueOrPromise<void>;
+  $serializePatch$: (extraRootId?: number | string) => ValueOrPromise<void>;
   $setWriter$: (writer: StreamWriter) => void;
 
   $symbolToChunkResolver$: SymbolToChunkResolver;
@@ -146,8 +146,8 @@ class SerializationContextImpl implements SerializationContext {
     return await this.$serializer$.serialize();
   }
 
-  async $serializePatch$(): Promise<void> {
-    return await this.$serializer$.serializePatch();
+  async $serializePatch$(extraRootId?: number | string): Promise<void> {
+    return await this.$serializer$.serializePatch(extraRootId);
   }
 
   $setWriter$(writer: StreamWriter): void {

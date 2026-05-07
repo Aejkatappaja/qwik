@@ -151,6 +151,8 @@ import {
   QScopedStyle,
   QSlot,
   QStyle,
+  QSuspenseResolved,
+  QSuspenseResultParent,
   QTargetElement,
 } from '../shared/utils/markers';
 import { isHtmlElement } from '../shared/utils/types';
@@ -816,7 +818,7 @@ export const vnode_locate = (rootVNode: ElementVNode, id: string | Element): VNo
         `Couldn't find the element inside the container while locating the VNode.`
       );
     if (__EXPERIMENTAL__.suspense && (refElement as QElement)._qSegment) {
-      vNode = vnode_newUnMaterializedElement(refElement);
+      vNode = (refElement as QElement).vNode || vnode_newUnMaterializedElement(refElement);
       vnode_ensureElementKeyInflated(vNode as ElementVNode);
     } else {
       // We need to find the vnode.
@@ -914,9 +916,10 @@ export const vnode_getVNodeForChildNode = (
 };
 
 const indexOfAlphanumeric = (id: string, length: number): number => {
-  let idx = 0;
+  let idx = id.charCodeAt(0) === 45 /* - */ ? 1 : 0;
   while (idx < length) {
-    if (id.charCodeAt(idx) <= 57 /* 9 */) {
+    const ch = id.charCodeAt(idx);
+    if (ch >= 48 /* 0 */ && ch <= 57 /* 9 */) {
       idx++;
     } else {
       return idx;
@@ -1500,6 +1503,14 @@ export const vnode_getFirstChild = (vnode: VNode): VNode | null => {
     return null;
   }
   let vFirstChild = (vnode as ElementVNode | VirtualVNode).firstChild;
+  if (
+    __EXPERIMENTAL__.suspense &&
+    vFirstChild === undefined &&
+    vnode_isElementVNode(vnode) &&
+    hasOnlySuspensePlaceholder(vnode.node)
+  ) {
+    return null;
+  }
   if (vFirstChild === undefined) {
     vFirstChild = ensureMaterialized(vnode as ElementVNode);
   }
@@ -1729,6 +1740,7 @@ const materializeFromDOM = (
   segmentId?: string | null
 ) => {
   let vFirstChild: VNode | null = null;
+  let idx = 0;
 
   const skipElements = () => {
     while (isElement(child) && shouldSkipElement(child)) {
@@ -1749,6 +1761,8 @@ const materializeFromDOM = (
       vnode_ensureElementKeyInflated(vNextChild as ElementVNode);
     }
     if (vNextChild) {
+      vNextChild.flags = (vNextChild.flags & VNodeFlagsIndex.mask) | (idx << VNodeFlagsIndex.shift);
+      idx++;
       vNextChild.parent = vParent;
       vChild && (vChild.nextSibling = vNextChild);
       vNextChild.previousSibling = vChild;
@@ -2044,6 +2058,20 @@ function shouldSkipElement(element: Element) {
   );
 }
 
+function hasOnlySuspensePlaceholder(element: Element) {
+  const segmentId = element.getAttribute(QSuspenseResultParent);
+  if (segmentId === null) {
+    return false;
+  }
+  const firstChild = fastFirstChild(element);
+  return (
+    isElement(firstChild) &&
+    firstChild.localName === 'template' &&
+    firstChild.getAttribute(QSuspenseResolved) === segmentId &&
+    fastNextSibling(firstChild) === null
+  );
+}
+
 const stack: any[] = [];
 function materializeFromVNodeData(
   vParent: ElementVNode | VirtualVNode,
@@ -2163,8 +2191,18 @@ function materializeFromVNodeData(
       vFirst = vLast = null;
     } else if (peek() === VNodeDataChar.SEPARATOR) {
       // Custom attribute: |key|value
-      const key = decodeVNodeDataString(consumeValue());
-      const value = decodeVNodeDataString(consumeValue());
+      const keyValue = consumeValue();
+      const key = decodeVNodeDataString(keyValue);
+      const valueSeparatorIdx = nextToConsumeIdx + keyValue.length + 1;
+      const isEscapedValue = getChar(valueSeparatorIdx + 1) === VNodeDataChar.SEPARATOR;
+      let value;
+      if (isEscapedValue) {
+        consume();
+        value = decodeURI(decodeVNodeDataString(consumeValue()));
+        consume();
+      } else {
+        value = decodeVNodeDataString(consumeValue());
+      }
       vnode_setProp(vParent, key, value);
     } else if (peek() === VNodeDataChar.CLOSE) {
       consume();

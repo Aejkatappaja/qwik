@@ -1,16 +1,16 @@
 /** Shared out-of-order Suspense executor logic for the inline script and source tests. */
 
 const Q_RESOLVED_SELECTOR = 'template[q\\:r="';
-const Q_FALLBACK_SELECTOR = '[q\\:f="';
+const Q_RESOLVED_ATTR = 'q:r';
+const Q_RESULT_PARENT_SELECTOR = '[q\\:rp="';
 const Q_GROUP_ATTR = 'q:g';
 const Q_INDEX_ATTR = 'q:i';
 const Q_ORDER_ATTR = 'q:o';
-const Q_COLLAPSED_ATTR = 'q:c';
 const Q_CONTAINER_SELECTOR = '[q\\:container]:not([q\\:container=html]):not([q\\:container=text])';
 
 type OutOfOrderTemplate = HTMLTemplateElement | null;
-type OutOfOrderFallback = Element | null;
-type OutOfOrderEntry = [OutOfOrderTemplate | 0, OutOfOrderFallback];
+type OutOfOrderHost = Element | null;
+type OutOfOrderEntry = [OutOfOrderHost | 0, OutOfOrderHost];
 type OutOfOrderScope = Document | Element;
 
 type OutOfOrderGroup = {
@@ -73,34 +73,59 @@ export const installOutOfOrderExecutor = (doc: Document) => {
     );
   };
 
-  const swap = (resolved: OutOfOrderTemplate, fallback: OutOfOrderFallback) => {
-    let content: Element | null;
-    let parent: Node | null;
+  const getResolvedTemplate = (scope: OutOfOrderScope, boundaryId: number): OutOfOrderTemplate => {
+    const currentScript = doc.currentScript;
+    const previousElement = currentScript ? currentScript.previousElementSibling : null;
+    if (
+      previousElement &&
+      previousElement.localName === 'template' &&
+      previousElement.getAttribute(Q_RESOLVED_ATTR) === String(boundaryId)
+    ) {
+      return previousElement as HTMLTemplateElement;
+    }
+    const templates = scope.querySelectorAll(Q_RESOLVED_SELECTOR + boundaryId + '"]');
+    return templates.length ? (templates[templates.length - 1] as HTMLTemplateElement) : null;
+  };
 
-    if (!resolved || !fallback) {
-      return 0;
-    }
-    parent = fallback.parentNode;
-    if (!parent) {
-      return 0;
-    }
-    content = fallback.nextElementSibling;
+  const getPlaceholderTemplate = (content: Element, boundaryId: number): OutOfOrderTemplate => {
+    return content.querySelector(Q_RESOLVED_SELECTOR + boundaryId + '"]') as OutOfOrderTemplate;
+  };
+
+  const getResultParent = (scope: OutOfOrderScope, boundaryId: number): Element | null => {
+    return scope.querySelector(Q_RESULT_PARENT_SELECTOR + boundaryId + '"]');
+  };
+
+  const reveal = (content: OutOfOrderHost, fallback: OutOfOrderHost) => {
     if (!content) {
       return 0;
     }
-    content.appendChild(resolved.content);
-    if ((fallback as HTMLElement).style) {
+    if (fallback && (fallback as HTMLElement).style) {
       (fallback as HTMLElement).style.display = 'none';
     }
     if ((content as HTMLElement).style) {
       (content as HTMLElement).style.display = 'contents';
     }
-    fallback.removeAttribute(Q_GROUP_ATTR);
-    fallback.removeAttribute(Q_INDEX_ATTR);
-    fallback.removeAttribute(Q_ORDER_ATTR);
-    fallback.removeAttribute(Q_COLLAPSED_ATTR);
-    resolved.remove();
     return 1;
+  };
+
+  const move = (scope: OutOfOrderScope, boundaryId: number, resolved: OutOfOrderTemplate) => {
+    let placeholder: OutOfOrderTemplate;
+    let content: Element | null;
+    let parent: Node | null;
+
+    if (!resolved) {
+      return null;
+    }
+    content = getResultParent(scope, boundaryId);
+    placeholder = content ? getPlaceholderTemplate(content, boundaryId) : null;
+    parent = placeholder ? placeholder.parentNode : null;
+    if (!placeholder || !content || !parent) {
+      return null;
+    }
+    parent.insertBefore(resolved.content, placeholder);
+    placeholder.remove();
+    resolved.remove();
+    return [content, content.previousElementSibling] as OutOfOrderEntry;
   };
 
   const flush = (group: OutOfOrderGroup) => {
@@ -112,14 +137,14 @@ export const installOutOfOrderExecutor = (doc: Document) => {
     if (order === 'p') {
       for (const key in group.r) {
         entry = group.r[key];
-        if (entry[0] && swap(entry[0], entry[1])) {
+        if (entry[0] && reveal(entry[0], entry[1])) {
           entry[0] = 0;
           swapped++;
         }
       }
     } else if (order === 's') {
       for (index = group.n; (entry = group.r[index]) && entry[0]; index++) {
-        if (!swap(entry[0], entry[1])) {
+        if (!reveal(entry[0], entry[1])) {
           break;
         }
         entry[0] = 0;
@@ -134,7 +159,7 @@ export const installOutOfOrderExecutor = (doc: Document) => {
         group.n = group.t - 1;
       }
       for (index = group.n; (entry = group.r[index]) && entry[0]; index--) {
-        if (!swap(entry[0], entry[1])) {
+        if (!reveal(entry[0], entry[1])) {
           break;
         }
         entry[0] = 0;
@@ -153,7 +178,7 @@ export const installOutOfOrderExecutor = (doc: Document) => {
       }
       for (index = 0; index < group.t; index++) {
         entry = group.r[index];
-        if (entry[0] && swap(entry[0], entry[1])) {
+        if (entry[0] && reveal(entry[0], entry[1])) {
           entry[0] = 0;
           swapped++;
         }
@@ -164,10 +189,8 @@ export const installOutOfOrderExecutor = (doc: Document) => {
 
   const qO = ((boundaryId: number) => {
     const scope = getScope();
-    const resolved = scope.querySelector(
-      Q_RESOLVED_SELECTOR + boundaryId + '"]'
-    ) as OutOfOrderTemplate;
-    let fallback: OutOfOrderFallback;
+    const resolved = getResolvedTemplate(scope, boundaryId);
+    let entry: OutOfOrderEntry | null;
     let groupId: string | null;
     let currentGroup: OutOfOrderGroup;
     let index: number;
@@ -175,20 +198,20 @@ export const installOutOfOrderExecutor = (doc: Document) => {
     if (!resolved) {
       return;
     }
-    fallback = scope.querySelector(Q_FALLBACK_SELECTOR + boundaryId + '"]') as OutOfOrderFallback;
-    groupId = resolved.getAttribute(Q_GROUP_ATTR);
-    if (groupId) {
-      index = +(resolved.getAttribute('q:i') || 0);
-      currentGroup = group(scope, groupId, -1, resolved.getAttribute('q:o') || 'p');
-      currentGroup.r[index] = [resolved, fallback];
-      if (flush(currentGroup)) {
-        process();
-      }
+    entry = move(scope, boundaryId, resolved);
+    if (!entry) {
       return;
     }
-    if (swap(resolved, fallback)) {
-      process();
+    process();
+    groupId = resolved.getAttribute(Q_GROUP_ATTR);
+    if (groupId) {
+      index = +(resolved.getAttribute(Q_INDEX_ATTR) || 0);
+      currentGroup = group(scope, groupId, -1, resolved.getAttribute(Q_ORDER_ATTR) || 'p');
+      currentGroup.r[index] = entry;
+      flush(currentGroup);
+      return;
     }
+    reveal(entry[0] || null, entry[1]);
   }) as OutOfOrderExecutor;
 
   qO.g = (groupId: number, total: number, order: string) => {
@@ -198,9 +221,7 @@ export const installOutOfOrderExecutor = (doc: Document) => {
     if (currentGroup.o === 'r' && currentGroup.n === 0) {
       currentGroup.n = total - 1;
     }
-    if (flush(currentGroup)) {
-      process();
-    }
+    flush(currentGroup);
   };
   qO.p = process;
   qO.d = doc;

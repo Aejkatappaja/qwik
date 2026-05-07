@@ -149,6 +149,7 @@ export interface SSRContainer extends Container {
   queueOutOfOrderSegment(segment: Promise<void>): void;
   emitOutOfOrderExecutorIfNeeded(): void;
   emitInlineScript(script: string): void;
+  writeScript(attrs: Props, body?: string): void;
 
   emitPreloaderPre(): void;
 
