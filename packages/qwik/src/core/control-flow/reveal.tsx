@@ -131,7 +131,7 @@ export const revealCmp = (props: RevealProps) => {
   const reveal = useConstant(createRevealContext, props);
   useContextProvider(RevealContext, reveal);
 
-  const isServerEnv = import.meta.env.TEST ? isServerPlatform() : !isBrowser;
+  const isServerEnv = qTest ? isServerPlatform() : !isBrowser;
   if (__EXPERIMENTAL__.suspense && isServerEnv && isOutOfOrderStreaming()) {
     const coordinator = getOutOfOrderCoordinator(reveal);
     return /*#__PURE__*/ _jsxSorted(

@@ -106,7 +106,7 @@ export const suspenseCmp = (props: SuspenseProps) => {
     ])
   );
 
-  const isServerEnv = import.meta.env.TEST ? isServerPlatform() : !isBrowser;
+  const isServerEnv = qTest ? isServerPlatform() : !isBrowser;
   const isServerOutOfOrder = isServerEnv && isOutOfOrderStreaming();
   const outOfOrderBoundaryId = isServerOutOfOrder ? nextOutOfOrderSuspenseId() : 0;
   const outOfOrderRevealBoundary = isServerOutOfOrder
