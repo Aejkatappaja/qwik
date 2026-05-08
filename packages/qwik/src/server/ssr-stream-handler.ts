@@ -1,5 +1,6 @@
 import { isPromise } from './qwik-copy';
 import type { IStreamHandler } from './qwik-types';
+import { createStringStreamWriter } from './ssr-stream-writer';
 import type {
   InOrderStreaming,
   RenderToStreamOptions,
@@ -40,31 +41,20 @@ export class StreamHandler implements IStreamHandler {
     let stream: StreamWriter;
     switch (this.inOrderStreaming.strategy) {
       case 'disabled':
-        stream = {
-          write(chunk: string) {
+        stream = createStringStreamWriter(
+          (chunk: string) => {
             if (chunk === undefined || chunk === null) {
               return;
             }
             handler.enqueue(chunk);
           },
-          writeRootRef(id: number) {
-            return this.write(String(id));
-          },
-          writeRootRefPath(path: number[]) {
-            this.write(String(path[0]));
-            for (let i = 1; i < path.length; i++) {
-              this.write(' ' + path[i]);
-            }
-          },
-          waitForDrain() {
-            return handler.waitForPendingFlush();
-          },
-        };
+          () => handler.waitForPendingFlush()
+        );
         break;
       case 'direct': {
         const originalStream = this.nativeStream;
-        stream = {
-          write(chunk: string) {
+        stream = createStringStreamWriter(
+          (chunk: string) => {
             if (chunk === undefined || chunk === null) {
               return;
             }
@@ -74,27 +64,16 @@ export class StreamHandler implements IStreamHandler {
             }
             return handler.trackPendingFlush(originalStream.write(chunk));
           },
-          writeRootRef(id: number) {
-            return this.write(String(id));
-          },
-          writeRootRefPath(path: number[]) {
-            this.write(String(path[0]));
-            for (let i = 1; i < path.length; i++) {
-              this.write(' ' + path[i]);
-            }
-          },
-          waitForDrain() {
-            return handler.waitForPendingFlush();
-          },
-        };
+          () => handler.waitForPendingFlush()
+        );
         break;
       }
       default:
       case 'auto': {
         const minimumChunkSize = this.inOrderStreaming.maximumChunk ?? 0;
         const initialChunkSize = this.inOrderStreaming.maximumInitialChunk ?? 0;
-        stream = {
-          write(chunk) {
+        stream = createStringStreamWriter(
+          (chunk) => {
             if (chunk === undefined || chunk === null) {
               return;
             }
@@ -110,19 +89,8 @@ export class StreamHandler implements IStreamHandler {
               }
             }
           },
-          writeRootRef(id: number) {
-            return this.write(String(id));
-          },
-          writeRootRefPath(path: number[]) {
-            this.write(String(path[0]));
-            for (let i = 1; i < path.length; i++) {
-              this.write(' ' + path[i]);
-            }
-          },
-          waitForDrain() {
-            return handler.waitForPendingFlush();
-          },
-        };
+          () => handler.waitForPendingFlush()
+        );
         break;
       }
     }

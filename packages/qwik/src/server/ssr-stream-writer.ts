@@ -1,5 +1,33 @@
 import type { SSRWriteChunk, StreamWriter } from './qwik-types';
 
+export const writeStringRootRef = (writer: Pick<StreamWriter, 'write'>, id: number): void => {
+  writer.write(String(id));
+};
+
+export const writeStringRootRefPath = (
+  writer: Pick<StreamWriter, 'write'>,
+  path: number[]
+): void => {
+  writer.write(String(path[0]));
+  for (let i = 1; i < path.length; i++) {
+    writer.write(' ' + path[i]);
+  }
+};
+
+export const createStringStreamWriter = (
+  write: StreamWriter['write'],
+  waitForDrain?: StreamWriter['waitForDrain']
+): StreamWriter => ({
+  write,
+  writeRootRef(id) {
+    return writeStringRootRef(this, id);
+  },
+  writeRootRefPath(path) {
+    return writeStringRootRefPath(this, path);
+  },
+  waitForDrain,
+});
+
 export const renderSSRChunks = (chunks: SSRWriteChunk[], remap?: number[]): string => {
   let out = '';
   for (let i = 0; i < chunks.length; i++) {
@@ -25,13 +53,10 @@ export class StringSSRWriter implements StreamWriter {
     this.buffer.push(text);
   }
   writeRootRef(id: number): void {
-    this.write(String(id));
+    writeStringRootRef(this, id);
   }
   writeRootRefPath(path: number[]): void {
-    this.write(String(path[0]));
-    for (let i = 1; i < path.length; i++) {
-      this.write(' ' + path[i]);
-    }
+    writeStringRootRefPath(this, path);
   }
   clear() {
     this.buffer.length = 0;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { StreamHandler } from './ssr-stream-handler';
-import type { RenderToStreamOptions, StreamWriter } from './types';
+import { createStringStreamWriter } from './ssr-stream-writer';
+import type { RenderToStreamOptions } from './types';
 
 const createDeferred = () => {
   let resolve!: () => void;
@@ -15,15 +16,13 @@ describe('StreamHandler', () => {
     const firstWrite = createDeferred();
     const chunks: string[] = [];
     let writeCount = 0;
-    const stream: StreamWriter = {
-      write(chunk) {
-        chunks.push(chunk);
-        writeCount++;
-        if (writeCount === 1) {
-          return firstWrite.promise;
-        }
-      },
-    };
+    const stream = createStringStreamWriter((chunk) => {
+      chunks.push(chunk);
+      writeCount++;
+      if (writeCount === 1) {
+        return firstWrite.promise;
+      }
+    });
     const handler = new StreamHandler(
       {
         stream,
