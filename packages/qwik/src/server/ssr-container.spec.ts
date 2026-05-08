@@ -4,6 +4,7 @@ import { QDefaultSlot, QStyle, VNodeDataChar, encodeVNodeDataString } from './qw
 import { VNodeDataFlag, type RenderToStreamOptions } from './types';
 import { OPEN_FRAGMENT, CLOSE_FRAGMENT } from './vnode-data';
 import { StreamHandler } from './ssr-stream-handler';
+import { StringSSRWriter } from './ssr-stream-writer';
 
 vi.hoisted(() => {
   vi.stubGlobal('QWIK_LOADER_DEFAULT_MINIFIED', 'min');
@@ -12,15 +13,7 @@ vi.hoisted(() => {
 
 describe('SSR Container', () => {
   it('should not emit Qwik loader before style elements', async () => {
-    const writer = {
-      chunks: [] as string[],
-      write(text: string) {
-        this.chunks.push(text);
-      },
-      toString() {
-        return this.chunks.join('');
-      },
-    };
+    const writer = new StringSSRWriter();
 
     const container = ssrCreateContainer({
       tagName: 'div',
@@ -56,15 +49,7 @@ describe('SSR Container', () => {
   });
 
   it('should encode custom attributes with separators in emitVNodeData', () => {
-    const writer = {
-      chunks: [] as string[],
-      write(text: string) {
-        this.chunks.push(text);
-      },
-      toString() {
-        return this.chunks.join('');
-      },
-    };
+    const writer = new StringSSRWriter();
 
     const container = ssrCreateContainer({
       tagName: 'div',
@@ -114,15 +99,7 @@ describe('SSR Container', () => {
   });
 
   it('should encode default slot projection refs with wrapped values', () => {
-    const writer = {
-      chunks: [] as string[],
-      write(text: string) {
-        this.chunks.push(text);
-      },
-      toString() {
-        return this.chunks.join('');
-      },
-    };
+    const writer = new StringSSRWriter();
 
     const container = ssrCreateContainer({
       tagName: 'div',

@@ -3,6 +3,7 @@ import { SignalImpl } from '../reactive-primitives/impl/signal-impl';
 import { getStoreHandler, getStoreTarget } from '../reactive-primitives/impl/store';
 import type { EffectSubscription } from '../reactive-primitives/types';
 import { scheduleEffects } from '../reactive-primitives/utils';
+import type { SubscriptionPatch } from '../shared/serdes/subscription-patch';
 import {
   canRevealRegistration,
   type RevealItemLike,
@@ -19,9 +20,6 @@ export type OutOfOrderRevealBoundary = {
   attrs: string;
   showFallback: boolean;
 };
-
-/** @internal */
-export type ExternalRootEffectsDelta = Array<[number, Array<[null | string | [number], number[]]>]>;
 
 type OutOfOrderRevealOrderCode = 'p' | 's' | 'r' | 't';
 const outOfOrderRevealIds = new WeakMap<Container, number>();
@@ -110,65 +108,59 @@ export const nextOutOfOrderSuspenseId = (): number => {
 };
 
 /** @internal */
-export const mergeExternalRootEffects = (
+export const applySubscriptionPatches = (
   container: Container,
-  effectsDelta: ExternalRootEffectsDelta | undefined
+  patches: SubscriptionPatch[] | undefined
 ): void => {
-  if (!__EXPERIMENTAL__.suspense || !effectsDelta) {
+  if (!__EXPERIMENTAL__.suspense || !patches) {
     return;
   }
-  for (let i = 0; i < effectsDelta.length; i++) {
-    const [rootId, effectsToAdd] = effectsDelta[i];
-    const root = container.$getObjectById$(rootId);
+  for (let i = 0; i < patches.length; i++) {
+    const patch = patches[i];
+    const root = container.$getObjectById$(patch.rootId);
+    const subscriptions = patch.subscriptions;
     if (root instanceof SignalImpl) {
-      for (let j = 0; j < effectsToAdd.length; j++) {
-        mergeExternalRootEffectSet(
-          container,
-          root,
-          root,
-          (root.$effects$ ||= new Set()),
-          effectsToAdd[j][1]
-        );
+      if (subscriptions instanceof Set) {
+        mergeSubscriptionSet(container, root, root, (root.$effects$ ||= new Set()), subscriptions);
       }
     } else {
+      if (!(subscriptions instanceof Map)) {
+        continue;
+      }
       const handler = getStoreHandler(root as any);
       const target = getStoreTarget(root as any);
       if (!handler || !target) {
         continue;
       }
       const effectsMap = (handler.$effects$ ||= new Map());
-      for (let j = 0; j < effectsToAdd.length; j++) {
-        const [prop, effectIds] = effectsToAdd[j];
-        const storeProp = Array.isArray(prop) ? container.$getObjectById$(prop[0]) : prop;
-        if (storeProp === null) {
-          continue;
-        }
-        let rootEffects = effectsMap.get(storeProp as string | symbol);
+      subscriptions.forEach((subscriptionSet, storeProp) => {
+        let rootEffects = effectsMap.get(storeProp);
         if (!rootEffects) {
           rootEffects = new Set();
-          effectsMap.set(storeProp as string | symbol, rootEffects);
+          effectsMap.set(storeProp, rootEffects);
         }
-        mergeExternalRootEffectSet(container, handler, target, rootEffects, effectIds);
-      }
+        mergeSubscriptionSet(container, handler, target, rootEffects, subscriptionSet);
+      });
     }
   }
 };
 
-const mergeExternalRootEffectSet = (
+const mergeSubscriptionSet = (
   container: Container,
   producer: unknown,
   backRef: unknown,
   rootEffects: Set<EffectSubscription>,
-  effectIds: number[]
+  patchEffects: Set<EffectSubscription>
 ): void => {
   let newEffects: Set<EffectSubscription> | undefined;
-  for (let i = 0; i < effectIds.length; i++) {
-    const effect = container.$getObjectById$(effectIds[i]) as EffectSubscription;
+  patchEffects.forEach((effect) => {
     if (!rootEffects.has(effect)) {
       rootEffects.add(effect);
       (newEffects ||= new Set()).add(effect);
     }
     (effect.backRef ||= new Set()).add(backRef as any);
+  });
+  if (newEffects) {
+    scheduleEffects(container, producer as any, newEffects);
   }
-  scheduleEffects(container, producer as any, newEffects);
 };

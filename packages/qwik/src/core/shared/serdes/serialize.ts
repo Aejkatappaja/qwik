@@ -48,6 +48,7 @@ import {
   type SeenRef,
   type SerializationContext,
 } from './serialization-context';
+import { SubscriptionPatch } from './subscription-patch';
 import { fastSkipSerialize, SerializerSymbol } from './verify';
 
 /**
@@ -486,6 +487,8 @@ export class Serializer {
     } else if (value instanceof EffectSubscription) {
       // TODO no data if [null, true]
       this.output(TypeIds.EffectSubscription, [value.consumer, value.property, value.data]);
+    } else if (value instanceof SubscriptionPatch) {
+      this.output(TypeIds.SubscriptionPatch, [value.rootId, value.subscriptions]);
     } else if (isStore(value)) {
       const storeHandler = getStoreHandler(value)!;
       const storeTarget = getStoreTarget(value);

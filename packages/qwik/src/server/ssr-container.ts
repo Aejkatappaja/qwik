@@ -99,10 +99,9 @@ import {
 } from './qwik-types';
 
 import {
-  collectExternalRootEffectsDelta,
+  collectSubscriptionPatches,
   recordExternalRootEffect,
-  type ExternalRootEffects,
-  type ExternalRootEffectsDelta,
+  type SubscriptionPatchRecords,
 } from './ooos-utils';
 import { preloaderPost, preloaderPre } from './preload-impl';
 import {
@@ -294,7 +293,7 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
   private renderQueue: Promise<unknown> = Promise.resolve();
   private emittedSyncFnCount = 0;
   private emittedQwikEventNames = new Set<string>();
-  private externalRootEffects: ExternalRootEffects | null = null;
+  private subscriptionPatchRecords: SubscriptionPatchRecords | null = null;
   public $rootContainer$: SSRContainer | null = null;
 
   constructor(opts: SSRContainerOptions) {
@@ -554,7 +553,7 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
     segmentContainer.vNodeDatas = [rootFrame.vNodeData];
     segmentContainer.componentStack = this.componentStack.slice();
     segmentContainer.vnodeSegment = segmentId;
-    segmentContainer.externalRootEffects = [];
+    segmentContainer.subscriptionPatchRecords = [];
     segmentContainer.serializationCtx.$recordExternalRootEffect$ = (
       producer,
       effect,
@@ -565,7 +564,7 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
         this.serializationCtx,
         segmentContainer.serializationCtx,
         this.$storeProxyMap$,
-        segmentContainer.externalRootEffects,
+        segmentContainer.subscriptionPatchRecords,
         producer,
         effect,
         prop,
@@ -599,25 +598,22 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
       const rootIdMap = commit.rootIdMap;
       this.mergeSegmentEventData(segmentSerializationCtx);
       this.mergeSegmentSyncFns(segmentSerializationCtx);
-      let externalRootEffectsDeltaId: number | undefined;
-      const externalRootEffectsDelta = rootReadyAtSegment
-        ? segmentContainer.collectExternalRootEffectsDelta(
-            this.rootContainerSerializedRootCount,
-            rootIdMap
-          )
+      let subscriptionPatchRootId: number | undefined;
+      const subscriptionPatches = rootReadyAtSegment
+        ? segmentContainer.collectSubscriptionPatches(this.rootContainerSerializedRootCount)
         : undefined;
-      if (externalRootEffectsDelta) {
-        externalRootEffectsDeltaId = segmentSerializationCtx.$addRoot$(externalRootEffectsDelta);
+      if (subscriptionPatches) {
+        subscriptionPatchRootId = segmentSerializationCtx.$addRoot$(subscriptionPatches);
       }
       if (
         rootReadyAtSegment &&
-        (commit.newRootLocalIds.length > 0 || externalRootEffectsDeltaId !== undefined)
+        (commit.newRootLocalIds.length > 0 || subscriptionPatchRootId !== undefined)
       ) {
         await segmentContainer.emitStatePatchData(
           segmentId,
           commit.newRootStart,
           commit.newRootLocalIds,
-          externalRootEffectsDeltaId
+          subscriptionPatchRootId
         );
         this.rootContainerSerializedRootCount = this.serializationCtx.$roots$.length;
       }
@@ -706,19 +702,14 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
     }
   }
 
-  private collectExternalRootEffectsDelta(
-    rootLimit: number,
-    rootIdMap: number[]
-  ): ExternalRootEffectsDelta | undefined {
+  private collectSubscriptionPatches(rootLimit: number) {
     if (!__EXPERIMENTAL__.suspense) {
       return;
     }
-    return collectExternalRootEffectsDelta(
+    return collectSubscriptionPatches(
       this.$rootContainer$?.serializationCtx || this.serializationCtx,
-      this.serializationCtx,
-      this.externalRootEffects,
-      rootLimit,
-      rootIdMap
+      this.subscriptionPatchRecords,
+      rootLimit
     );
   }
 
@@ -1371,13 +1362,13 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
     segmentId: string,
     rootStart: number,
     rootIds: number[],
-    externalRootEffectsDeltaId?: number | string | number[]
+    subscriptionPatchRootId?: number | string | number[]
   ): ValueOrPromise<void> {
     const attrs = this.statePatchScriptAttrs(segmentId);
     this.openScript(attrs);
     this.serializationCtx.$setWriter$(this.writer);
     return maybeThen(
-      this.serializationCtx.$serializePatch$(rootStart, rootIds, externalRootEffectsDeltaId),
+      this.serializationCtx.$serializePatch$(rootStart, rootIds, subscriptionPatchRootId),
       () => {
         this.closeScript();
       }

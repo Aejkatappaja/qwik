@@ -117,6 +117,23 @@ const Counter = componentQrl(
   }, 's_counter1')
 );
 
+const createStreamWriter = (
+  write: StreamWriter['write'],
+  writeRoot: StreamWriter['write'] = () => {}
+): StreamWriter => ({
+  write,
+  writeRootRef(id) {
+    return writeRoot(String(id));
+  },
+  writeRootRefPath(path) {
+    let text = String(path[0]);
+    for (let i = 1; i < path.length; i++) {
+      text += ' ' + path[i];
+    }
+    return writeRoot(text);
+  },
+});
+
 const renderToStringAndSetPlatform = async (jsx: JSXOutput, opts: RenderToStringOptions = {}) => {
   const platform = getPlatform();
   let result: RenderToStringResult;
@@ -787,11 +804,10 @@ describe('render api', () => {
     describe('render result', () => {
       it('should renderToStream', async () => {
         const chunks: string[] = [];
-        const stream: StreamWriter = {
-          write(chunk) {
-            chunks.push(chunk);
-          },
+        const write = (chunk: string) => {
+          chunks.push(chunk);
         };
+        const stream = createStreamWriter(write, write);
         await renderToStreamAndSetPlatform(<Counter />, {
           containerTagName: 'div',
           stream,
@@ -815,9 +831,7 @@ describe('render api', () => {
     });
     describe('stream', () => {
       it('should render', async () => {
-        const stream: StreamWriter = {
-          write: vi.fn(),
-        };
+        const stream = createStreamWriter(vi.fn());
         await renderToStreamAndSetPlatform(<Counter />, {
           containerTagName: 'div',
           stream,
@@ -828,7 +842,7 @@ describe('render api', () => {
     describe('streaming', () => {
       it('should render all at once', async () => {
         const write = vi.fn();
-        const stream: StreamWriter = { write };
+        const stream = createStreamWriter(write);
         const streaming: StreamingOptions = {
           inOrder: {
             strategy: 'disabled',
@@ -843,7 +857,7 @@ describe('render api', () => {
       });
       it('should render by direct streaming', async () => {
         const write = vi.fn();
-        const stream: StreamWriter = { write };
+        const stream = createStreamWriter(write);
         const streaming: StreamingOptions = {
           inOrder: {
             strategy: 'direct',
@@ -859,15 +873,13 @@ describe('render api', () => {
       it('should wait for an async direct write before emitting the next one', async () => {
         const firstWrite = createDeferred();
         let writeCount = 0;
-        const stream: StreamWriter = {
-          write() {
-            writeCount++;
-            if (writeCount === 1) {
-              return firstWrite.promise;
-            }
-            return Promise.resolve();
-          },
-        };
+        const stream = createStreamWriter(() => {
+          writeCount++;
+          if (writeCount === 1) {
+            return firstWrite.promise;
+          }
+          return Promise.resolve();
+        });
         const streaming: StreamingOptions = {
           inOrder: {
             strategy: 'direct',
@@ -901,9 +913,7 @@ describe('render api', () => {
         expect(writeCount).toBeGreaterThan(1);
       });
       it('should render chunk by chunk with auto streaming', async () => {
-        const stream: StreamWriter = {
-          write: vi.fn(),
-        };
+        const stream = createStreamWriter(vi.fn());
         const streaming: StreamingOptions = {
           inOrder: {
             strategy: 'auto',
@@ -917,21 +927,19 @@ describe('render api', () => {
           streaming,
         });
         // This can change when the size of the output changes
-        expect(stream.write).toHaveBeenCalledTimes(4);
+        expect(stream.write).toHaveBeenCalledTimes(5);
       });
 
       it('should wait for an async flush before emitting the next chunk', async () => {
         const firstWrite = createDeferred();
         let writeCount = 0;
-        const stream: StreamWriter = {
-          write() {
-            writeCount++;
-            if (writeCount === 1) {
-              return firstWrite.promise;
-            }
-            return Promise.resolve();
-          },
-        };
+        const stream = createStreamWriter(() => {
+          writeCount++;
+          if (writeCount === 1) {
+            return firstWrite.promise;
+          }
+          return Promise.resolve();
+        });
         const streaming: StreamingOptions = {
           inOrder: {
             strategy: 'auto',

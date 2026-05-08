@@ -5,10 +5,8 @@ import type { QRLInternal } from '../../server/qwik-types';
 import { assertTrue } from '../shared/error/assert';
 import { QError, qError } from '../shared/error/error';
 import { ERROR_CONTEXT, isRecoverable } from '../shared/error/error-handling';
-import {
-  mergeExternalRootEffects,
-  type ExternalRootEffectsDelta,
-} from '../control-flow/suspense-utils';
+import { applySubscriptionPatches } from '../control-flow/suspense-utils';
+import type { SubscriptionPatch } from '../shared/serdes/subscription-patch';
 import type { QRL } from '../shared/qrl/qrl.public';
 import { wrapDeserializerProxy } from '../shared/serdes/deser-proxy';
 import { getObjectById, parseQRL, preprocessState } from '../shared/serdes/index';
@@ -215,19 +213,16 @@ export class DomContainer extends _SharedContainer implements IClientContainer {
       return;
     }
     if (textContent) {
-      const [rootStart, rawStateData, forwardRefs, effectsDeltaId] = JSON.parse(textContent) as [
-        number,
-        unknown[],
-        Array<number | string> | 0 | undefined,
-        number | string | undefined,
-      ];
+      const [rootStart, rawStateData, forwardRefs, subscriptionPatchRootId] = JSON.parse(
+        textContent
+      ) as [number, unknown[], Array<number | string> | 0 | undefined, number | string | undefined];
       this.$appendStatePatchRoots$(rootStart, rawStateData);
       this.$mergeForwardRefs$(forwardRefs || undefined);
-      mergeExternalRootEffects(
+      applySubscriptionPatches(
         this,
-        effectsDeltaId === undefined
+        subscriptionPatchRootId === undefined
           ? undefined
-          : (this.$getObjectById$(effectsDeltaId) as ExternalRootEffectsDelta)
+          : (this.$getObjectById$(subscriptionPatchRootId) as SubscriptionPatch[])
       );
     }
   }

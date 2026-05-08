@@ -1,32 +1,25 @@
+import { _SubscriptionPatch as SubscriptionPatch } from '@qwik.dev/core/internal';
 import type { EffectSubscription, ObjToProxyMap, SerializationContext } from './qwik-types';
 
-export type ExternalRootEffectProp = string | symbol | null;
+export type SubscriptionPatchProp = string | symbol | null;
 
-export interface ExternalRootEffectEntry {
+export interface SubscriptionPatchRecord {
   rootObj: unknown;
   rootId: number | undefined;
   effect: EffectSubscription;
-  effectRootId: number;
-  prop: ExternalRootEffectProp;
-  propObj?: ExternalRootEffectProp;
-  propRootId?: number;
+  prop: SubscriptionPatchProp;
 }
 
-export type ExternalRootEffects = ExternalRootEffectEntry[];
-
-export type ExternalRootEffectsDeltaProp = null | string | [number];
-export type ExternalRootEffectsDeltaEffects = [ExternalRootEffectsDeltaProp, number[]];
-export type ExternalRootEffectsDeltaEntry = [number, ExternalRootEffectsDeltaEffects[]];
-export type ExternalRootEffectsDelta = ExternalRootEffectsDeltaEntry[];
+export type SubscriptionPatchRecords = SubscriptionPatchRecord[];
 
 export const recordExternalRootEffect = (
   rootCtx: SerializationContext,
   segmentCtx: SerializationContext,
   storeProxyMap: ObjToProxyMap,
-  records: ExternalRootEffects | null,
+  records: SubscriptionPatchRecords | null,
   producer: unknown,
   effect: EffectSubscription,
-  prop: ExternalRootEffectProp,
+  prop: SubscriptionPatchProp,
   sourceEffects?: Map<string | symbol, Set<EffectSubscription>>
 ): void => {
   if (!records || (prop !== null && !sourceEffects)) {
@@ -42,65 +35,58 @@ export const recordExternalRootEffect = (
   }
   const rootId = rootCtx.$hasRootId$(rootObj);
   segmentCtx.$addRoot$(rootObj);
+  segmentCtx.$addRoot$(effect);
+  if (prop !== null && typeof prop !== 'string') {
+    segmentCtx.$addRoot$(prop);
+  }
   records.push({
     rootObj,
     rootId,
     effect,
-    effectRootId: segmentCtx.$addRoot$(effect),
     prop,
-    propObj: prop,
-    propRootId: prop !== null && typeof prop !== 'string' ? segmentCtx.$addRoot$(prop) : undefined,
   });
 };
 
-export const collectExternalRootEffectsDelta = (
+export const collectSubscriptionPatches = (
   rootCtx: SerializationContext,
-  segmentCtx: SerializationContext,
-  records: ExternalRootEffects | null,
-  rootLimit: number,
-  rootIdMap: number[]
-): ExternalRootEffectsDelta | undefined => {
+  records: SubscriptionPatchRecords | null,
+  rootLimit: number
+): SubscriptionPatch[] | undefined => {
   if (!records?.length) {
     return;
   }
-  const delta: ExternalRootEffectsDelta = [];
-  const deltaByRoot = new Map<
-    number,
-    {
-      entry: ExternalRootEffectsDeltaEntry;
-      byProp: Map<ExternalRootEffectProp, ExternalRootEffectsDeltaEffects>;
-    }
-  >();
+  const patches: SubscriptionPatch[] = [];
+  const patchesByRoot = new Map<number, SubscriptionPatch>();
   for (let i = 0; i < records.length; i++) {
     const entry = records[i];
     const rootId = entry.rootId === undefined ? rootCtx.$hasRootId$(entry.rootObj) : entry.rootId;
     if (rootId === undefined || rootId >= rootLimit) {
       continue;
     }
-    let rootDelta = deltaByRoot.get(rootId);
-    if (!rootDelta) {
-      rootDelta = { entry: [rootId, []], byProp: new Map() };
-      deltaByRoot.set(rootId, rootDelta);
-      delta.push(rootDelta.entry);
+    let patch = patchesByRoot.get(rootId);
+    if (!patch) {
+      patch = new SubscriptionPatch(
+        rootId,
+        entry.prop === null ? new Set() : new Map<string | symbol, Set<EffectSubscription>>()
+      );
+      patchesByRoot.set(rootId, patch);
+      patches.push(patch);
     }
-    let prop: ExternalRootEffectsDeltaProp;
+    const subscriptions = patch.subscriptions;
     if (entry.prop === null) {
-      prop = null;
-    } else if (typeof entry.prop === 'string') {
-      prop = entry.prop;
+      if (subscriptions instanceof Set) {
+        subscriptions.add(entry.effect);
+      }
     } else {
-      prop = [rootIdMap[segmentCtx.$addRoot$(entry.propObj!)]];
-    }
-    let effects = rootDelta.byProp.get(entry.prop);
-    if (!effects) {
-      effects = [prop, []];
-      rootDelta.byProp.set(entry.prop, effects);
-      rootDelta.entry[1].push(effects);
-    }
-    const effectRootId = rootIdMap[segmentCtx.$addRoot$(entry.effect)];
-    if (effects[1].indexOf(effectRootId) === -1) {
-      effects[1].push(effectRootId);
+      if (subscriptions instanceof Map) {
+        let effects = subscriptions.get(entry.prop);
+        if (!effects) {
+          effects = new Set();
+          subscriptions.set(entry.prop, effects);
+        }
+        effects.add(entry.effect);
+      }
     }
   }
-  return delta.length ? delta : undefined;
+  return patches.length ? patches : undefined;
 };
