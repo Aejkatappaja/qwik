@@ -24,10 +24,11 @@ export type { Container, HostElement, ObjToProxyMap } from '../core/shared/types
 export type {
   ISsrComponentFrame,
   ISsrNode,
+  SSRRootRefPathChunk,
   SSRContainer,
   SSROutOfOrderSegment,
-  SSRPromiseMode,
   SSRRenderJSXOptions,
+  SSRWriteChunk,
   StreamWriter,
   IStreamHandler,
 } from '../core/ssr/ssr-types';

@@ -21,9 +21,7 @@ export type OutOfOrderRevealBoundary = {
 };
 
 /** @internal */
-export type ExternalRootEffectsDelta = Array<
-  [number | string, null | string | [number | string], Array<number | string>]
->;
+export type ExternalRootEffectsDelta = Array<[number, Array<[null | string | [number], number[]]>]>;
 
 type OutOfOrderRevealOrderCode = 'p' | 's' | 'r' | 't';
 const outOfOrderRevealIds = new WeakMap<Container, number>();
@@ -120,10 +118,18 @@ export const mergeExternalRootEffects = (
     return;
   }
   for (let i = 0; i < effectsDelta.length; i++) {
-    const [rootId, prop, effectIds] = effectsDelta[i];
+    const [rootId, effectsToAdd] = effectsDelta[i];
     const root = container.$getObjectById$(rootId);
     if (root instanceof SignalImpl) {
-      mergeExternalRootEffectSet(container, root, root, (root.$effects$ ||= new Set()), effectIds);
+      for (let j = 0; j < effectsToAdd.length; j++) {
+        mergeExternalRootEffectSet(
+          container,
+          root,
+          root,
+          (root.$effects$ ||= new Set()),
+          effectsToAdd[j][1]
+        );
+      }
     } else {
       const handler = getStoreHandler(root as any);
       const target = getStoreTarget(root as any);
@@ -131,16 +137,19 @@ export const mergeExternalRootEffects = (
         continue;
       }
       const effectsMap = (handler.$effects$ ||= new Map());
-      const storeProp = Array.isArray(prop) ? container.$getObjectById$(prop[0]) : prop;
-      if (storeProp === null) {
-        continue;
+      for (let j = 0; j < effectsToAdd.length; j++) {
+        const [prop, effectIds] = effectsToAdd[j];
+        const storeProp = Array.isArray(prop) ? container.$getObjectById$(prop[0]) : prop;
+        if (storeProp === null) {
+          continue;
+        }
+        let rootEffects = effectsMap.get(storeProp as string | symbol);
+        if (!rootEffects) {
+          rootEffects = new Set();
+          effectsMap.set(storeProp as string | symbol, rootEffects);
+        }
+        mergeExternalRootEffectSet(container, handler, target, rootEffects, effectIds);
       }
-      let rootEffects = effectsMap.get(storeProp as string | symbol);
-      if (!rootEffects) {
-        rootEffects = new Set();
-        effectsMap.set(storeProp as string | symbol, rootEffects);
-      }
-      mergeExternalRootEffectSet(container, handler, target, rootEffects, effectIds);
     }
   }
 };
@@ -150,7 +159,7 @@ const mergeExternalRootEffectSet = (
   producer: unknown,
   backRef: unknown,
   rootEffects: Set<EffectSubscription>,
-  effectIds: Array<number | string>
+  effectIds: number[]
 ): void => {
   let newEffects: Set<EffectSubscription> | undefined;
   for (let i = 0; i < effectIds.length; i++) {

@@ -47,6 +47,15 @@ export class StreamHandler implements IStreamHandler {
             }
             handler.enqueue(chunk);
           },
+          writeRootRef(id: number) {
+            return this.write(String(id));
+          },
+          writeRootRefPath(path: number[]) {
+            this.write(String(path[0]));
+            for (let i = 1; i < path.length; i++) {
+              this.write(' ' + path[i]);
+            }
+          },
           waitForDrain() {
             return handler.waitForPendingFlush();
           },
@@ -64,6 +73,15 @@ export class StreamHandler implements IStreamHandler {
               return handler.trackPendingFlush(queued);
             }
             return handler.trackPendingFlush(originalStream.write(chunk));
+          },
+          writeRootRef(id: number) {
+            return this.write(String(id));
+          },
+          writeRootRefPath(path: number[]) {
+            this.write(String(path[0]));
+            for (let i = 1; i < path.length; i++) {
+              this.write(' ' + path[i]);
+            }
           },
           waitForDrain() {
             return handler.waitForPendingFlush();
@@ -90,6 +108,15 @@ export class StreamHandler implements IStreamHandler {
               if (handler.bufferSize >= maxBufferSize) {
                 return handler.flush();
               }
+            }
+          },
+          writeRootRef(id: number) {
+            return this.write(String(id));
+          },
+          writeRootRefPath(path: number[]) {
+            this.write(String(path[0]));
+            for (let i = 1; i < path.length; i++) {
+              this.write(' ' + path[i]);
             }
           },
           waitForDrain() {

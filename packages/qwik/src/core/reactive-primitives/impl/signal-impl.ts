@@ -3,6 +3,7 @@ import { pad, qwikDebugToString } from '../../debug';
 import { assertTrue } from '../../shared/error/assert';
 import { qError, QError } from '../../shared/error/error';
 import type { Container } from '../../shared/types';
+import type { SerializationContext } from '../../shared/serdes';
 import { isSameContainer } from '../../shared/utils/container';
 import { qDev, qTest } from '../../shared/utils/qdev';
 import { tryGetInvokeContext } from '../../use/use-core';
@@ -16,7 +17,6 @@ import type { Signal } from '../signal.public';
 import { SignalFlags, type EffectSubscription } from '../types';
 import type { WrappedSignalImpl } from './wrapped-signal-impl';
 import { isServerPlatform } from '../../shared/platform/platform';
-import type { SSRContainer } from '../../ssr/ssr-types';
 
 const DEBUG = false;
 // eslint-disable-next-line no-console
@@ -89,11 +89,9 @@ export class SignalImpl<T = any> implements Signal<T> {
       ensureContainsBackRef(effectSubscriber, this);
       const serializationContainer = ctx.$container$ || this.$container$;
       if (shouldRecordExternalRootEffect) {
-        (serializationContainer as SSRContainer).$recordExternalRootEffect$(
-          this,
-          effectSubscriber,
-          null
-        );
+        (
+          serializationContainer as (Container & { serializationCtx?: SerializationContext }) | null
+        )?.serializationCtx?.$recordExternalRootEffect$?.(this, effectSubscriber, null);
       }
       isOnServer && addQrlToSerializationCtx(effectSubscriber, serializationContainer);
       DEBUG && log('read->sub', pad('\n' + this.toString(), '  '));

@@ -4,6 +4,7 @@ import { assertTrue } from '../../shared/error/assert';
 import { tryGetInvokeContext } from '../../use/use-core';
 import { isObject, isSerializableObject } from '../../shared/utils/types';
 import type { Container } from '../../shared/types';
+import type { SerializationContext } from '../../shared/serdes';
 import { isSameContainer } from '../../shared/utils/container';
 import {
   addQrlToSerializationCtx,
@@ -21,7 +22,6 @@ import {
 } from '../types';
 import type { PropsProxy, PropsProxyHandler } from '../../shared/jsx/props-proxy';
 import { isDev, isServer } from '@qwik.dev/core/build';
-import type { SSRContainer } from '../../ssr/ssr-types';
 import { isServerPlatform } from '../../shared/platform/platform';
 
 const DEBUG = false;
@@ -281,12 +281,17 @@ export function addStoreEffect(
   ensureContainsBackRef(effectSubscription, target);
   const serializationContainer = renderContainer || store.$container$;
   if (shouldRecordExternalRootEffect) {
-    (serializationContainer as SSRContainer).$recordExternalRootEffect$(
-      target,
-      effectSubscription,
-      prop,
-      effectsMap
-    );
+    const recordExternalRootEffect = (
+      serializationContainer as (Container & { serializationCtx?: SerializationContext }) | null
+    )?.serializationCtx?.$recordExternalRootEffect$ as
+      | ((
+          producer: unknown,
+          effect: EffectSubscription,
+          prop: string | symbol | null,
+          sourceEffects?: Map<string | symbol, Set<EffectSubscription>>
+        ) => void)
+      | undefined;
+    recordExternalRootEffect?.(target, effectSubscription, prop, effectsMap);
   }
   // TODO is this needed with the preloader?
   isOnServer && addQrlToSerializationCtx(effectSubscription, serializationContainer);

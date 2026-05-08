@@ -89,19 +89,7 @@ export async function _walkJSX(
         // Reference equality first (no prototype walk), then typeof
         if (value === MaybeAsyncSignal) {
           const trackFn = stack.pop() as () => StackValue;
-          if (isSuspenseCaptureMode(options)) {
-            try {
-              stack.push(trackFn());
-            } catch (err) {
-              if (isPromise(err)) {
-                ssr.$captureOutOfOrderPromise$(err);
-              } else {
-                throw err;
-              }
-            }
-          } else {
-            await retryOnPromise(() => stack.push(trackFn()));
-          }
+          await retryOnPromise(() => stack.push(trackFn()));
           continue;
         }
         if (typeof value === 'function') {
@@ -157,12 +145,8 @@ function processJSXNode(
     } else if (isPromise(value)) {
       ssr.openFragment(isDev ? { [DEBUG_TYPE]: VirtualType.Awaited } : EMPTY_OBJ);
       enqueue(ssr.closeFragment);
-      if (isSuspenseCaptureMode(options)) {
-        ssr.$captureOutOfOrderPromise$(value);
-      } else {
-        enqueue(value);
-        enqueue(Promise);
-      }
+      enqueue(value);
+      enqueue(Promise);
       enqueue(() => ssr.streamHandler.flush());
     } else if (isAsyncGenerator(value)) {
       enqueue(async () => {
@@ -170,7 +154,6 @@ function processJSXNode(
           await _walkJSX(ssr, chunk as JSXOutput, {
             currentStyleScoped: options.currentStyleScoped,
             parentComponentFrame: options.parentComponentFrame,
-            promiseMode: options.promiseMode,
             slotReplay: options.slotReplay,
           });
           await ssr.streamHandler.flush();
@@ -306,7 +289,6 @@ function processJSXNode(
                 await _walkJSX(ssr, chunk, {
                   currentStyleScoped: options.currentStyleScoped,
                   parentComponentFrame: options.parentComponentFrame,
-                  promiseMode: options.promiseMode,
                   slotReplay: options.slotReplay,
                 });
                 await ssr.streamHandler.flush();
@@ -343,20 +325,16 @@ function processJSXNode(
           enqueue(
             setParentOptions(options, options.currentStyleScoped, options.parentComponentFrame)
           );
-          enqueue(() => ssr.closeComponent(options.promiseMode));
+          enqueue(() => ssr.closeComponent());
           if (isPromise(jsxOutput)) {
-            if (isSuspenseCaptureMode(options)) {
-              ssr.$captureOutOfOrderPromise$(jsxOutput);
-            } else {
-              // Defer reading QScopedStyle until after the promise resolves
-              enqueue(async () => {
-                const resolvedOutput = await jsxOutput;
-                const compStyleComponentId = addComponentStylePrefix(host.getProp(QScopedStyle));
+            // Defer reading QScopedStyle until after the promise resolves
+            enqueue(async () => {
+              const resolvedOutput = await jsxOutput;
+              const compStyleComponentId = addComponentStylePrefix(host.getProp(QScopedStyle));
 
-                enqueue(resolvedOutput);
-                enqueue(setParentOptions(options, compStyleComponentId, componentFrame));
-              });
-            }
+              enqueue(resolvedOutput);
+              enqueue(setParentOptions(options, compStyleComponentId, componentFrame));
+            });
           } else {
             enqueue(jsxOutput);
             const compStyleComponentId = addComponentStylePrefix(host.getProp(QScopedStyle));
@@ -376,20 +354,12 @@ function processJSXNode(
             type,
             jsx
           );
-          if (isPromise(jsxOutput) && isSuspenseCaptureMode(options)) {
-            ssr.$captureOutOfOrderPromise$(jsxOutput);
-          } else {
-            enqueue(jsxOutput);
-            isPromise(jsxOutput) && enqueue(Promise);
-          }
+          enqueue(jsxOutput);
+          isPromise(jsxOutput) && enqueue(Promise);
         }
       }
     }
   }
-}
-
-function isSuspenseCaptureMode(options: SSRRenderJSXOptions): boolean {
-  return __EXPERIMENTAL__.suspense && options.promiseMode === 'suspense-capture';
 }
 
 function recordSlotReplay(

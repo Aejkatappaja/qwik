@@ -14,12 +14,21 @@ import type { Props } from '../shared/jsx/jsx-runtime';
 import type { JSXNodeInternal } from '../shared/jsx/types/jsx-node';
 import type { QRL } from '../shared/qrl/qrl.public';
 import type { SsrNodeFlags } from '../shared/types';
-import type { EffectSubscription } from '../reactive-primitives/types';
 import type { ResourceReturnInternal } from '../use/use-resource';
+
+/** @internal */
+export interface SSRRootRefPathChunk {
+  readonly path: number[];
+}
+
+/** @internal */
+export type SSRWriteChunk = string | number | SSRRootRefPathChunk;
 
 /** @internal */
 export interface StreamWriter {
   write(chunk: string): ValueOrPromise<void>;
+  writeRootRef(id: number): ValueOrPromise<void>;
+  writeRootRefPath(path: number[]): ValueOrPromise<void>;
   waitForDrain?(): ValueOrPromise<void>;
 }
 
@@ -56,8 +65,6 @@ export interface ISsrComponentFrame {
 
 export type SymbolToChunkResolver = (symbol: string) => string;
 
-export type SSRPromiseMode = 'normal' | 'suspense-capture';
-
 /** @internal */
 export type SSRSlotReplayRecords = Map<ISsrComponentFrame, Map<string, JSXChildren | null>>;
 
@@ -70,7 +77,6 @@ export interface SSRSlotReplay {
 export interface SSRRenderJSXOptions {
   currentStyleScoped: string | null;
   parentComponentFrame: ISsrComponentFrame | null;
-  promiseMode?: SSRPromiseMode;
   slotReplay?: SSRSlotReplay;
 }
 
@@ -119,7 +125,7 @@ export interface SSRContainer extends Container {
   openComponent(attrs: Props): void;
   getComponentFrame(projectionDepth: number): ISsrComponentFrame | null;
   getParentComponentFrame(): ISsrComponentFrame | null;
-  closeComponent(promiseMode?: SSRPromiseMode): Promise<void>;
+  closeComponent(): Promise<void>;
 
   textNode(text: string): void;
   htmlNode(rawHtml: string): void;
@@ -132,13 +138,6 @@ export interface SSRContainer extends Container {
   renderJSX(jsx: JSXOutput, options: SSRRenderJSXOptions): Promise<void>;
   $runQueuedRender$<T>(render: () => ValueOrPromise<T>): Promise<T>;
   $runQueuedRenderBeforeRootState$<T>(render: () => ValueOrPromise<T>): Promise<T>;
-  $captureOutOfOrderPromise$(promise: Promise<unknown>): never;
-  $recordExternalRootEffect$(
-    producer: unknown,
-    effect: EffectSubscription,
-    prop: string | symbol | null,
-    sourceEffects?: Map<string | symbol, Set<EffectSubscription>>
-  ): void;
   nextOutOfOrderId(): number;
   emitOutOfOrderSegmentScripts(scripts: string): void;
   segment(

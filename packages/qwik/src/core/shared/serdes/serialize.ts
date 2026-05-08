@@ -1,5 +1,5 @@
 import { isDev } from '@qwik.dev/core/build';
-import { VNodeDataFlag, type StreamWriter } from '../../../server/types';
+import { VNodeDataFlag } from '../../../server/types';
 import type { VNodeData } from '../../../server/vnode-data';
 import { vnode_isVNode } from '../../client/vnode-utils';
 import { AsyncSignalImpl } from '../../reactive-primitives/impl/async-signal-impl';
@@ -19,6 +19,7 @@ import {
 } from '../../reactive-primitives/types';
 import { isSerializerObj } from '../../reactive-primitives/utils';
 import { Task } from '../../use/use-task';
+import type { SSRWriteChunk, StreamWriter } from '../../ssr/ssr-types';
 import { isQwikComponent, SERIALIZABLE_STATE } from '../component.public';
 import { qError, QError } from '../error/error';
 import { isJSXNode } from '../jsx/jsx-node';
@@ -60,7 +61,7 @@ import { fastSkipSerialize, SerializerSymbol } from './verify';
  */
 export class Serializer {
   private $rootIdx$ = 0;
-  private $forwardRefs$: Array<number | string> = [];
+  private $forwardRefs$: Array<number | string | number[]> = [];
   private $forwardRefsId$ = 0;
   private $promises$: Set<Promise<unknown>> = new Set();
   private $s11nWeakRefs$ = new Map<unknown, number>();
@@ -85,8 +86,11 @@ export class Serializer {
     }
   }
 
-  async serializePatch(extraRootId?: number | string): Promise<void> {
-    const rootStart = this.$rootIdx$;
+  async serializePatch(
+    rootStart: number,
+    rootIds: number[],
+    extraRootId?: number | string | number[]
+  ): Promise<void> {
     const previousStreamedRootLimit = this.$streamedRootLimit$;
     this.$streamedRootLimit$ = rootStart;
     this.$writer$.write(BRACKET_OPEN);
@@ -94,7 +98,7 @@ export class Serializer {
       this.$writer$.write(String(rootStart));
       this.$writer$.write(COMMA);
       this.$writer$.write(BRACKET_OPEN);
-      await this.outputPendingRoots();
+      await this.outputSelectedRoots(rootIds);
       this.$writer$.write(BRACKET_CLOSE);
       const forwardRefs = this.getForwardRefsPayload();
       if (forwardRefs || extraRootId !== undefined) {
@@ -108,9 +112,13 @@ export class Serializer {
       if (extraRootId !== undefined) {
         this.$writer$.write(COMMA);
         if (typeof extraRootId === 'number') {
-          this.$writer$.write(String(extraRootId));
-        } else {
+          this.writeRootRef(extraRootId);
+        } else if (typeof extraRootId === 'string') {
           this.outputString(extraRootId);
+        } else {
+          this.$writer$.write(QUOTE);
+          this.writeRootRefPath(extraRootId);
+          this.$writer$.write(QUOTE);
         }
       }
     } finally {
@@ -203,9 +211,46 @@ export class Serializer {
     this.$writer$.write(lastIdx === 0 ? s : s.slice(lastIdx));
   }
 
+  private writeRootRef(id: number): void {
+    this.$writer$.writeRootRef(id);
+  }
+
+  private writeRootRefPath(path: number[]): void {
+    this.$writer$.writeRootRefPath(path);
+  }
+
+  private outputStringChunks(chunks: SSRWriteChunk[]): void {
+    this.$writer$.write(QUOTE);
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i];
+      if (typeof chunk === 'string') {
+        this.$writer$.write(chunk);
+      } else if (typeof chunk === 'number') {
+        this.writeRootRef(chunk);
+      } else {
+        this.writeRootRefPath(chunk.path);
+      }
+    }
+    this.$writer$.write(QUOTE);
+  }
+
   /** Output a type,value pair. If the value is an array, it calls writeValue on each item. */
   private output(type: number, value: number | string | any[], keepUndefined?: boolean) {
-    if (typeof value === 'number') {
+    if (type === TypeIds.RootRef) {
+      this.$writer$.write(type + COMMA);
+      if (typeof value === 'number') {
+        this.writeRootRef(value);
+      } else if (typeof value === 'string') {
+        this.outputString(value);
+      } else {
+        this.$writer$.write(QUOTE);
+        this.writeRootRefPath(value as number[]);
+        this.$writer$.write(QUOTE);
+      }
+    } else if (type === TypeIds.QRL && Array.isArray(value)) {
+      this.$writer$.write(type + COMMA);
+      this.outputStringChunks(value as SSRWriteChunk[]);
+    } else if (typeof value === 'number') {
       this.$writer$.write(type + COMMA + value);
     } else if (typeof value === 'string') {
       this.$writer$.write(type + COMMA);
@@ -231,13 +276,6 @@ export class Serializer {
       if (keepWeak) {
         // we're testing a weakref, so don't mark it as seen yet
         return true as unknown as SeenRef;
-      }
-      const externalRootId = __EXPERIMENTAL__.suspense
-        ? this.$serializationContext$.$getExternalRootId$?.(value)
-        : undefined;
-      if (externalRootId !== undefined) {
-        this.output(TypeIds.RootRef, externalRootId);
-        return;
       }
       // Maybe it's a weakref and that should count as seen
       if (typeof forwardRefIdx === 'number') {
@@ -360,19 +398,34 @@ export class Serializer {
                 value,
                 true
               );
-              let data: string | number;
+              let data: string | number | SSRWriteChunk[];
               if (chunk !== '') {
                 // not a sync QRL, replace all parts with string references
-                data = `${this.$serializationContext$.$addRoot$(chunk)}#${this.$serializationContext$.$addRoot$(symbol)}${captures ? '#' + captures : ''}`;
+                data = [
+                  this.$serializationContext$.$addRoot$(chunk),
+                  '#',
+                  this.$serializationContext$.$addRoot$(symbol),
+                ];
+                if (captures) {
+                  const captureIds = captures.split(' ');
+                  data.push('#');
+                  for (let i = 0; i < captureIds.length; i++) {
+                    if (i > 0) {
+                      data.push(' ');
+                    }
+                    data.push(Number(captureIds[i]));
+                  }
+                }
                 // Since we map QRLs to strings, we need to keep track of this secondary mapping
-                const existing = this.$qrlMap$.get(data);
+                const qrlKey = data.join('');
+                const existing = this.$qrlMap$.get(qrlKey);
                 if (existing) {
                   // We encountered the same QRL again, make it a root
                   const ref = this.$serializationContext$.$addRoot$(existing);
                   this.output(TypeIds.RootRef, ref);
                   return;
                 } else {
-                  this.$qrlMap$.set(data, value);
+                  this.$qrlMap$.set(qrlKey, value);
                 }
               } else {
                 // sync QRL
@@ -611,7 +664,7 @@ export class Serializer {
       this.output(TypeIds.Error, out);
     } else if (this.$serializationContext$.$isSsrNode$(value)) {
       const rootIndex = this.$serializationContext$.$addRoot$(value);
-      this.$serializationContext$.$setProp$(value, ELEMENT_ID, String(rootIndex));
+      this.$serializationContext$.$setProp$(value, ELEMENT_ID, rootIndex);
       // we need to output before the vnode overwrites its values
       this.output(TypeIds.VNode, value.id);
       const vNodeData = value.vnodeData;
@@ -768,7 +821,28 @@ export class Serializer {
     return rootsWritten;
   }
 
-  private getForwardRefsPayload(): Array<number | string> | null {
+  private async outputSelectedRoots(rootIds: number[]): Promise<void> {
+    let separator = false;
+    for (let i = 0; i < rootIds.length; i++) {
+      if (separator) {
+        this.$writer$.write(COMMA);
+      } else {
+        separator = true;
+      }
+      const rootId = rootIds[i];
+      this.writeValue(this.$serializationContext$.$roots$[rootId], rootId);
+    }
+    while (this.$promises$.size) {
+      try {
+        await Promise.race(this.$promises$);
+      } catch {
+        // ignore rejections, they will be serialized as rejected promises
+      }
+      for (; this.$rootIdx$ < this.$serializationContext$.$roots$.length; this.$rootIdx$++) {}
+    }
+  }
+
+  private getForwardRefsPayload(): Array<number | string | number[]> | null {
     let lastIdx = this.$forwardRefs$.length - 1;
     while (lastIdx >= 0 && this.$forwardRefs$[lastIdx] === -1) {
       lastIdx--;
@@ -781,12 +855,16 @@ export class Serializer {
       : this.$forwardRefs$.slice(0, lastIdx + 1);
   }
 
-  private outputForwardRefsArray(forwardRefs: Array<number | string>): void {
+  private outputForwardRefsArray(forwardRefs: Array<number | string | number[]>): void {
     this.outputArray(forwardRefs, true, (value) => {
       if (typeof value === 'string') {
         this.outputString(value);
+      } else if (Array.isArray(value)) {
+        this.$writer$.write(QUOTE);
+        this.writeRootRefPath(value as number[]);
+        this.$writer$.write(QUOTE);
       } else {
-        this.$writer$.write(String(value));
+        this.writeRootRef(value as number);
       }
     });
   }

@@ -27,6 +27,15 @@ export const renderToString = async (
     write(chunk) {
       chunks.push(chunk);
     },
+    writeRootRef(id) {
+      chunks.push(String(id));
+    },
+    writeRootRefPath(path) {
+      chunks.push(String(path[0]));
+      for (let i = 1; i < path.length; i++) {
+        chunks.push(' ' + path[i]);
+      }
+    },
   };
 
   const result = await renderToStream(jsx, { ...opts, stream });
