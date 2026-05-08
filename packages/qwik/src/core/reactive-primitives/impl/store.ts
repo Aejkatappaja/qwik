@@ -4,6 +4,7 @@ import { assertTrue } from '../../shared/error/assert';
 import { tryGetInvokeContext } from '../../use/use-core';
 import { isObject, isSerializableObject } from '../../shared/utils/types';
 import type { Container } from '../../shared/types';
+import { isSameContainer } from '../../shared/utils/container';
 import {
   addQrlToSerializationCtx,
   ensureContainsBackRef,
@@ -139,7 +140,7 @@ export class StoreHandler implements ProxyHandler<StoreTarget> {
       } else {
         isDev &&
           assertTrue(
-            !ctx.$container$ || ctx.$container$ === this.$container$,
+            !ctx.$container$ || isSameContainer(ctx.$container$, this.$container$),
             'Do not use signals across containers'
           );
       }
@@ -149,7 +150,8 @@ export class StoreHandler implements ProxyHandler<StoreTarget> {
           target,
           Array.isArray(target) ? STORE_ALL_PROPS : prop,
           this,
-          effectSubscriber
+          effectSubscriber,
+          ctx.$container$
         );
       }
     }
@@ -217,7 +219,8 @@ export class StoreHandler implements ProxyHandler<StoreTarget> {
             target,
             Array.isArray(target) ? STORE_ALL_PROPS : prop,
             this,
-            effectSubscriber
+            effectSubscriber,
+            ctx.$container$
           );
         }
       }
@@ -229,7 +232,7 @@ export class StoreHandler implements ProxyHandler<StoreTarget> {
     const ctx = tryGetInvokeContext();
     const effectSubscriber = ctx?.$effectSubscriber$;
     if (effectSubscriber) {
-      addStoreEffect(target, STORE_ALL_PROPS, this, effectSubscriber);
+      addStoreEffect(target, STORE_ALL_PROPS, this, effectSubscriber, ctx.$container$);
     }
     return Reflect.ownKeys(target);
   }
@@ -256,7 +259,8 @@ export function addStoreEffect(
   target: StoreTarget | PropsProxy,
   prop: string | symbol,
   store: StoreHandler | PropsProxyHandler,
-  effectSubscription: EffectSubscription
+  effectSubscription: EffectSubscription,
+  renderContainer?: Container
 ) {
   const effectsMap = (store.$effects$ ||= new Map());
   let effects = effectsMap.get(prop);
@@ -275,8 +279,9 @@ export function addStoreEffect(
   // to unsubscribe from. So we need to store the reference from the effect back
   // to this signal.
   ensureContainsBackRef(effectSubscription, target);
+  const serializationContainer = renderContainer || store.$container$;
   if (shouldRecordExternalRootEffect) {
-    (store.$container$ as SSRContainer).$recordExternalRootEffect$(
+    (serializationContainer as SSRContainer).$recordExternalRootEffect$(
       target,
       effectSubscription,
       prop,
@@ -284,7 +289,7 @@ export function addStoreEffect(
     );
   }
   // TODO is this needed with the preloader?
-  isOnServer && addQrlToSerializationCtx(effectSubscription, store.$container$);
+  isOnServer && addQrlToSerializationCtx(effectSubscription, serializationContainer);
 
   DEBUG &&
     log(

@@ -8,11 +8,18 @@ import { Fragment } from '../shared/jsx/jsx-runtime';
 import { directGetPropsProxyProp } from '../shared/jsx/props-proxy';
 import { Slot } from '../shared/jsx/slot.public';
 import type { JSXOutput } from '../shared/jsx/types/jsx-node';
+import type { JSXChildren } from '../shared/jsx/types/jsx-qwik-attributes';
 import { isServerPlatform } from '../shared/platform/platform';
 import { _fnSignal } from '../shared/qrl/inlined-fn';
 import { inlinedQrl } from '../shared/qrl/qrl';
 import { _captures } from '../shared/qrl/qrl-class';
-import { QCursorBoundary, QSuspenseResolved, QSuspenseResultParent } from '../shared/utils/markers';
+import {
+  QCursorBoundary,
+  QDefaultSlot,
+  QSuspenseResolved,
+  QSuspenseResultParent,
+} from '../shared/utils/markers';
+import { resolveSlotName } from '../shared/utils/prop';
 import { createInternalServerComponent } from '../ssr/internal-server-component';
 import type { SSRContainer, SSRRenderJSXOptions, SSRSlotReplayRecords } from '../ssr/ssr-types';
 import { useComputedQrl } from '../use/use-computed';
@@ -198,76 +205,74 @@ const SSRDeferredSlot = __EXPERIMENTAL__.suspense
         jsx.flags,
         jsx.key
       );
-      const segmentOptions = { ...options };
-      const slotReplayRecords: SSRSlotReplayRecords = new Map();
-      const content = await ssr.segment(contentSegment, slot, {
-        ...segmentOptions,
-        promiseMode: 'suspense-capture',
-        slotReplay: {
-          mode: 'record',
-          records: slotReplayRecords,
-        },
-      });
+      const slotReplayRecords = claimDeferredSlotProjection(ssr, slot, options);
+      const content = ssr.segment(
+        contentSegment,
+        slot,
+        slotReplayRecords
+          ? {
+              ...options,
+              slotReplay: {
+                mode: 'replay',
+                records: slotReplayRecords,
+              },
+            }
+          : options
+      );
 
       writeOutOfOrderPlaceholder(ssr, boundaryId);
       ssr.emitOutOfOrderExecutorIfNeeded();
-
-      if (content.suspended) {
-        await ssr.streamHandler.flush();
-        ssr.queueOutOfOrderSegment(
-          emitResolvedOutOfOrderSegment(
-            ssr,
-            boundaryId,
-            contentSegment,
-            slot,
-            segmentOptions,
-            content.suspended,
-            revealBoundary,
-            slotReplayRecords
-          )
-        );
-      } else {
-        ssr.queueOutOfOrderSegment(
-          emitRenderedOutOfOrderSegment(ssr, boundaryId, content, revealBoundary)
-        );
-      }
+      ssr.queueOutOfOrderSegment(
+        content.then((rendered) =>
+          emitRenderedOutOfOrderSegment(ssr, boundaryId, contentSegment, rendered, revealBoundary)
+        )
+      );
     })
   : null!;
 
-async function emitResolvedOutOfOrderSegment(
+function claimDeferredSlotProjection(
   ssr: SSRContainer,
-  boundaryId: number,
-  segmentId: string,
-  children: JSXOutput,
-  options: SSRRenderJSXOptions,
-  firstPromise: Promise<unknown>,
-  revealBoundary: OutOfOrderRevealBoundary | null,
-  slotReplayRecords: SSRSlotReplayRecords
-): Promise<void> {
-  await firstPromise;
-  const rendered = await ssr.$runQueuedRenderBeforeRootState$(() =>
-    ssr.segment(segmentId, children, {
-      ...options,
-      promiseMode: 'normal',
-      slotReplay: {
-        mode: 'replay',
-        records: slotReplayRecords,
-      },
-    })
-  );
-  await emitRenderedOutOfOrderSegment(ssr, boundaryId, rendered, revealBoundary);
+  slot: ReturnType<typeof _jsxSorted>,
+  options: SSRRenderJSXOptions
+): SSRSlotReplayRecords | null {
+  const componentFrame = options.parentComponentFrame;
+  if (!componentFrame) {
+    return null;
+  }
+  const slotName = resolveSlotName(componentFrame.componentNode, slot, ssr);
+  const slotDefaultChildren = (slot.children || null) as JSXChildren | null;
+  const slotChildren =
+    (
+      componentFrame as unknown as { claimChildrenForSlot(slotName: string): JSXChildren | null }
+    ).claimChildrenForSlot(slotName) || slotDefaultChildren;
+  if (slotDefaultChildren && slotChildren !== slotDefaultChildren) {
+    ssr.addUnclaimedProjection(componentFrame, QDefaultSlot, slotDefaultChildren);
+  }
+  const slotReplayRecords: SSRSlotReplayRecords = new Map();
+  slotReplayRecords.set(componentFrame, new Map([[slotName, slotChildren]]));
+  return slotReplayRecords;
 }
 
 async function emitRenderedOutOfOrderSegment(
   ssr: SSRContainer,
   boundaryId: number,
+  segmentId: string,
   rendered: Awaited<ReturnType<SSRContainer['segment']>>,
   revealBoundary: OutOfOrderRevealBoundary | null
 ): Promise<void> {
   await ssr.$runQueuedRenderBeforeRootState$(async () => {
+    const scripts = await (
+      ssr as SSRContainer & {
+        $finalizeOutOfOrderSegment$(
+          segmentId: string,
+          rendered: Awaited<ReturnType<SSRContainer['segment']>>
+        ): Promise<string>;
+      }
+    ).$finalizeOutOfOrderSegment$(segmentId, rendered);
     writeOutOfOrderResolvedTemplate(ssr, boundaryId, rendered.html, revealBoundary);
-    ssr.emitOutOfOrderSegmentScripts(rendered.scripts);
+    ssr.emitOutOfOrderSegmentScripts(scripts);
     ssr.emitInlineScript(`qO(${boundaryId})`);
+    // qO() is the browser-visible handoff for this segment, so flush it immediately.
     await ssr.streamHandler.flush();
   });
 }

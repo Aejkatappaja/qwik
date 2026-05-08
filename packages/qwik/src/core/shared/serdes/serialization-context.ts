@@ -38,13 +38,11 @@ export class SerializationBackRef {
 }
 
 interface AddRootFn {
-  (obj: unknown, returnRef?: never): number | string;
+  (obj: unknown, returnRef?: never): number;
   (obj: unknown, returnRef: true): SeenRef;
 }
 export interface SerializationContext {
   $serialize$: () => ValueOrPromise<void>;
-  $serializePatch$: (extraRootId?: number | string) => ValueOrPromise<void>;
-  $setWriter$: (writer: StreamWriter) => void;
 
   $symbolToChunkResolver$: SymbolToChunkResolver;
 
@@ -62,7 +60,6 @@ export interface SerializationContext {
 
   /** Returns the root index of the object, if it is a root. Otherwise returns undefined. */
   $hasRootId$: (obj: unknown) => number | undefined;
-  $ensureRootId$: (obj: unknown) => number | undefined;
 
   /**
    * Root objects which need to be serialized.
@@ -72,20 +69,14 @@ export interface SerializationContext {
    * Returns the index of the root object.
    */
   $addRoot$: AddRootFn;
-  $addDuplicateRoot$: (obj: unknown) => SeenRef;
 
   /** Mark an object as seen during serialization. This is used to handle backreferences and cycles */
   $markSeen$: (obj: unknown, parent: SeenRef | undefined, index: number) => SeenRef;
 
   $roots$: unknown[];
-  $rootObjs$: unknown[];
 
-  $promoteToRoot$: (ref: SeenRef, obj: unknown, index?: number) => void;
-  $commitRoot$: (root: unknown, obj: unknown) => number;
-  $formatLocalRef$: (id: number) => number | string;
-  $formatLocalPath$: (path: string) => string;
+  $promoteToRoot$: (ref: SeenRef, index?: number) => void;
 
-  $setSyncFnOffset$: (offset: number, existingFns?: string[]) => void;
   $addSyncFn$($funcStr$: string | null, argsCount: number, fn: Function): number;
 
   $isSsrNode$: (obj: unknown) => obj is SsrNode;
@@ -99,8 +90,6 @@ export interface SerializationContext {
   $renderSymbols$: Set<string>;
   $storeProxyMap$: ObjToProxyMap;
   $eagerResume$: Set<unknown>;
-  $rootIdOffset$: number;
-  $getExternalRootId$: ((obj: unknown) => number | undefined) | null;
 
   $setProp$: (obj: any, prop: string, value: any) => void;
 }
@@ -108,16 +97,12 @@ export interface SerializationContext {
 class SerializationContextImpl implements SerializationContext {
   private $seenObjsMap$ = new Map<unknown, SeenRef>();
   private $syncFnMap$ = new Map<string, number>();
-  private $syncFnOffset$ = 0;
   public $syncFns$: string[] = [];
   public $roots$: unknown[] = [];
-  public $rootObjs$: unknown[] = [];
   public $eagerResume$: Set<unknown> = new Set();
   public $eventQrls$: Set<QRL> = new Set();
   public $eventNames$: Set<string> = new Set();
   public $renderSymbols$: Set<string> = new Set();
-  public $rootIdOffset$ = 0;
-  public $getExternalRootId$: ((obj: unknown) => number | undefined) | null = null;
   private $serializer$: Serializer;
 
   constructor(
@@ -146,15 +131,6 @@ class SerializationContextImpl implements SerializationContext {
     return await this.$serializer$.serialize();
   }
 
-  async $serializePatch$(extraRootId?: number | string): Promise<void> {
-    return await this.$serializer$.serializePatch(extraRootId);
-  }
-
-  $setWriter$(writer: StreamWriter): void {
-    this.$writer$ = writer;
-    this.$serializer$.$setWriter$(writer);
-  }
-
   getSeenRef(obj: unknown) {
     return this.$seenObjsMap$.get(obj);
   }
@@ -163,21 +139,6 @@ class SerializationContextImpl implements SerializationContext {
     const ref = { $index$: index, $parent$: parent };
     this.$seenObjsMap$.set(obj, ref);
     return ref;
-  }
-
-  $formatLocalRef$(id: number): number | string {
-    return __EXPERIMENTAL__.suspense ? id + this.$rootIdOffset$ : id;
-  }
-
-  $formatLocalPath$(path: string): string {
-    if (__EXPERIMENTAL__.suspense && this.$rootIdOffset$) {
-      const spaceIndex = path.indexOf(' ');
-      return spaceIndex === -1
-        ? String(parseInt(path, 10) + this.$rootIdOffset$)
-        : String(parseInt(path.slice(0, spaceIndex), 10) + this.$rootIdOffset$) +
-            path.slice(spaceIndex);
-    }
-    return path;
   }
 
   /**
@@ -194,37 +155,22 @@ class SerializationContextImpl implements SerializationContext {
     // Now we are at root, but it could be a backref
     path.unshift(ref.$index$);
 
-    return this.$formatLocalPath$(path.join(' '));
+    return path.join(' ');
   }
 
-  $promoteToRoot$(ref: SeenRef, obj: unknown, index?: number) {
+  $promoteToRoot$(ref: SeenRef, index?: number) {
     const path = this.$getObjectPath$(ref) as string;
     if (index === undefined) {
       index = this.$roots$.length;
     }
     this.$roots$[index] = new SerializationBackRef(path);
-    this.$rootObjs$[index] = obj;
     ref.$parent$ = null;
     ref.$index$ = index;
   }
 
-  $commitRoot$(root: unknown, obj: unknown): number {
-    const index = this.$roots$.length;
-    this.$roots$.push(root);
-    this.$rootObjs$[index] = obj;
-    this.$seenObjsMap$.set(obj, { $index$: index });
-    return index;
-  }
-
   $addRoot$(obj: any, returnRef: true): SeenRef;
-  $addRoot$(obj: any, returnRef?: never): number | string;
-  $addRoot$(obj: any, returnRef: boolean = false): number | string | SeenRef {
-    if (__EXPERIMENTAL__.suspense && !returnRef) {
-      const externalRootId = this.$getExternalRootId$?.(obj);
-      if (externalRootId !== undefined) {
-        return externalRootId;
-      }
-    }
+  $addRoot$(obj: any, returnRef?: never): number;
+  $addRoot$(obj: any, returnRef: boolean = false): number | SeenRef {
     let seen = this.$seenObjsMap$.get(obj);
     let index: number;
 
@@ -237,25 +183,14 @@ class SerializationContextImpl implements SerializationContext {
       };
       this.$seenObjsMap$.set(obj, seen);
       this.$roots$.push(obj);
-      this.$rootObjs$.push(obj);
     } else {
       if (seen.$parent$) {
-        this.$promoteToRoot$(seen, obj);
+        this.$promoteToRoot$(seen);
       }
       index = seen.$index$;
     }
 
-    return returnRef ? seen : this.$formatLocalRef$(index);
-  }
-
-  $addDuplicateRoot$(obj: any): SeenRef {
-    const seen = {
-      $index$: this.$roots$.length,
-    };
-    this.$seenObjsMap$.set(obj, seen);
-    this.$roots$.push(obj);
-    this.$rootObjs$.push(obj);
-    return seen;
+    return returnRef ? seen : index;
   }
 
   $isSsrNode$(obj: unknown): obj is SsrNode {
@@ -271,49 +206,24 @@ class SerializationContextImpl implements SerializationContext {
     return id && (id.$parent$ ? undefined : id.$index$);
   }
 
-  $ensureRootId$(obj: any) {
-    const ref = this.$seenObjsMap$.get(obj);
-    if (!ref) {
-      return undefined;
-    }
-    if (!ref.$parent$) {
-      return ref.$index$;
-    }
-    const index = this.$roots$.length;
-    const path = this.$getObjectPath$(ref) as string;
-    this.$roots$.push(new SerializationBackRef(path));
-    this.$rootObjs$[index] = obj;
-    ref.$parent$ = null;
-    ref.$index$ = index;
-    return index;
-  }
-
-  $setSyncFnOffset$(offset: number, existingFns?: string[]): void {
-    this.$syncFnOffset$ = offset;
-    if (existingFns) {
-      for (let i = 0; i < existingFns.length; i++) {
-        this.$syncFnMap$.set(existingFns[i], i);
-      }
-    }
-  }
-
   $addSyncFn$(funcStr: string | null, argCount: number, fn: Function): number {
     const isFullFn = funcStr == null;
-    let code: string;
     if (isFullFn) {
-      code = ((fn as any).serialized as string) || fn.toString();
-    } else {
-      code = '(';
-      for (let i = 0; i < argCount; i++) {
-        code += (i == 0 ? 'p' : ',p') + i;
-      }
-      code += ')=>' + funcStr;
+      funcStr = ((fn as any).serialized as string) || fn.toString();
     }
-    let id = this.$syncFnMap$.get(code);
+    let id = this.$syncFnMap$.get(funcStr!);
     if (id === undefined) {
-      id = this.$syncFnOffset$ + this.$syncFns$.length;
-      this.$syncFnMap$.set(code, id);
-      this.$syncFns$.push(code);
+      id = this.$syncFns$.length;
+      this.$syncFnMap$.set(funcStr!, id);
+      if (isFullFn) {
+        this.$syncFns$.push(funcStr!);
+      } else {
+        let code = '(';
+        for (let i = 0; i < argCount; i++) {
+          code += (i == 0 ? 'p' : ',p') + i;
+        }
+        this.$syncFns$.push((code += ')=>' + funcStr));
+      }
     }
     return id;
   }

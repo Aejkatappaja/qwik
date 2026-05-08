@@ -3,6 +3,7 @@ import { pad, qwikDebugToString } from '../../debug';
 import { assertTrue } from '../../shared/error/assert';
 import { qError, QError } from '../../shared/error/error';
 import type { Container } from '../../shared/types';
+import { isSameContainer } from '../../shared/utils/container';
 import { qDev, qTest } from '../../shared/utils/qdev';
 import { tryGetInvokeContext } from '../../use/use-core';
 import {
@@ -69,7 +70,7 @@ export class SignalImpl<T = any> implements Signal<T> {
     } else {
       isDev &&
         assertTrue(
-          !ctx.$container$ || ctx.$container$ === this.$container$,
+          !ctx.$container$ || isSameContainer(ctx.$container$, this.$container$),
           'Do not use signals across containers'
         );
     }
@@ -86,10 +87,15 @@ export class SignalImpl<T = any> implements Signal<T> {
       // to unsubscribe from. So we need to store the reference from the effect back
       // to this signal.
       ensureContainsBackRef(effectSubscriber, this);
+      const serializationContainer = ctx.$container$ || this.$container$;
       if (shouldRecordExternalRootEffect) {
-        (this.$container$ as SSRContainer).$recordExternalRootEffect$(this, effectSubscriber, null);
+        (serializationContainer as SSRContainer).$recordExternalRootEffect$(
+          this,
+          effectSubscriber,
+          null
+        );
       }
-      isOnServer && addQrlToSerializationCtx(effectSubscriber, this.$container$);
+      isOnServer && addQrlToSerializationCtx(effectSubscriber, serializationContainer);
       DEBUG && log('read->sub', pad('\n' + this.toString(), '  '));
     } else {
       DEBUG && log('read no sub', pad('\n' + this.toString(), '  '));

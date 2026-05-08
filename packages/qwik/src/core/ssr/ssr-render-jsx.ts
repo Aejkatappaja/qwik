@@ -34,6 +34,7 @@ import {
 import { isPromise, retryOnPromise } from '../shared/utils/promises';
 import { qInspector } from '../shared/utils/qdev';
 import { addComponentStylePrefix } from '../shared/utils/scoped-styles';
+import type { InnerContainer } from '../shared/utils/container';
 import { isFunction, type ValueOrPromise } from '../shared/utils/types';
 import { trackSignalAndAssignHost } from '../use/use-core';
 import type { CursorBoundary } from '../use/use-cursor-boundary';
@@ -210,10 +211,13 @@ function processJSXNode(
           enqueue(ssr.additionalHeadNodes);
         } else if (type === 'body') {
           enqueue(ssr.additionalBodyNodes);
-        } else if (!ssr.isHtml && !(ssr as any)._didAddQwikLoader && !ssr.$noScriptHere$) {
-          ssr.emitQwikLoaderAtTopIfNeeded();
-          ssr.emitPreloaderPre();
-          (ssr as any)._didAddQwikLoader = true;
+        } else {
+          const innerSSR = ssr as SSRContainer & InnerContainer;
+          if (!ssr.isHtml && !innerSSR._didAddQwikLoader && !ssr.$noScriptHere$) {
+            ssr.emitQwikLoaderAtTopIfNeeded();
+            ssr.emitPreloaderPre();
+            innerSSR._didAddQwikLoader = true;
+          }
         }
 
         const children = jsx.children as JSXOutput;

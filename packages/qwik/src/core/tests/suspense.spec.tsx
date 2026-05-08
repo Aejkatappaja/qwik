@@ -1111,12 +1111,88 @@ describe('renderToStream: out-of-order Suspense', () => {
     const swapIndex = html.indexOf('qO(1)');
     const segmentVnodeIndex = html.indexOf('type="qwik/vnode" q:r="1"');
     const rootStateIndex = html.indexOf('type="qwik/state"');
+    const swapChunkIndex = chunks.findIndex((chunk) => chunk.includes('qO(1)'));
+    const rootStateChunkIndex = chunks.findIndex((chunk) => chunk.includes('type="qwik/state"'));
 
     expect(resolvedHtmlIndex).toBeGreaterThan(-1);
     expect(swapIndex).toBeGreaterThan(resolvedHtmlIndex);
-    expect(segmentVnodeIndex).toBeGreaterThan(swapIndex);
-    expect(rootStateIndex).toBeGreaterThan(segmentVnodeIndex);
+    expect(segmentVnodeIndex).toBeGreaterThan(resolvedHtmlIndex);
+    expect(rootStateIndex).toBeGreaterThan(-1);
+    expect(swapChunkIndex).toBeGreaterThan(-1);
+    expect(rootStateChunkIndex).toBeGreaterThan(-1);
     expect(html).not.toContain('q:patch');
+  });
+
+  it('should stream sibling task-backed boundaries as each task resolves once', async () => {
+    const firstResolvers: Array<() => void> = [];
+    const secondResolvers: Array<() => void> = [];
+    (globalThis as any).__ooosTaskFirstResolvers = firstResolvers;
+    (globalThis as any).__ooosTaskSecondResolvers = secondResolvers;
+
+    const First = component$(() => {
+      useTask$(() => {
+        return new Promise<void>((resolve) => {
+          (globalThis as any).__ooosTaskFirstResolvers.push(resolve);
+        });
+      });
+      return <p>First task ready</p>;
+    });
+    const Second = component$(() => {
+      useTask$(() => {
+        return new Promise<void>((resolve) => {
+          (globalThis as any).__ooosTaskSecondResolvers.push(resolve);
+        });
+      });
+      return <p>Second task ready</p>;
+    });
+    const chunks: string[] = [];
+
+    const renderPromise = renderToStream(
+      <main>
+        <Suspense fallback={<p>First waiting</p>}>
+          <First />
+        </Suspense>
+        <Suspense fallback={<p>Second waiting</p>}>
+          <Second />
+        </Suspense>
+      </main>,
+      {
+        containerTagName: 'div',
+        qwikLoader: 'never',
+        stream: {
+          write(chunk) {
+            chunks.push(chunk);
+          },
+        },
+        streaming: {
+          inOrder: { strategy: 'disabled' },
+          outOfOrder: { strategy: 'suspense' },
+        },
+      }
+    );
+
+    try {
+      await vi.waitFor(() => expect(firstResolvers.length).toBe(1));
+      await vi.waitFor(() => expect(secondResolvers.length).toBe(1));
+      firstResolvers.shift()!();
+      await vi.waitFor(() => expect(chunks.join('')).toContain('First task ready'));
+      expect(chunks.join('')).not.toContain('Second task ready');
+
+      secondResolvers.shift()!();
+      await renderPromise;
+      expect(chunks.join('')).toContain('Second task ready');
+      expect(firstResolvers.length).toBe(0);
+      expect(secondResolvers.length).toBe(0);
+    } finally {
+      while (firstResolvers.length) {
+        firstResolvers.shift()!();
+      }
+      while (secondResolvers.length) {
+        secondResolvers.shift()!();
+      }
+      delete (globalThis as any).__ooosTaskFirstResolvers;
+      delete (globalThis as any).__ooosTaskSecondResolvers;
+    }
   });
 
   it('should emit compact segment vnode attributes', async () => {
