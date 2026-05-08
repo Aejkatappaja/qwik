@@ -1,7 +1,8 @@
 import type { VNodeData } from '../../../server/vnode-data';
 import type { _EFFECT_BACK_REF } from '../../internal';
 import type { EffectProperty, EffectSubscription } from '../../reactive-primitives/types';
-import type { ISsrNode, StreamWriter, SymbolToChunkResolver } from '../../ssr/ssr-types';
+import type { ISsrNode, SSRInternalStreamWriter, SymbolToChunkResolver } from '../../ssr/ssr-types';
+import { createStringStreamWriter } from '../../ssr/stream-writer';
 import type { QRL } from '../qrl/qrl.public';
 import type { ObjToProxyMap } from '../types';
 import type { ValueOrPromise } from '../utils/types';
@@ -93,8 +94,8 @@ export interface SerializationContext {
   $isSsrNode$: (obj: unknown) => obj is SsrNode;
   $isDomRef$: (obj: unknown) => obj is DomRef;
 
-  $writer$: StreamWriter;
-  $setWriter$(writer: StreamWriter): void;
+  $writer$: SSRInternalStreamWriter;
+  $setWriter$(writer: SSRInternalStreamWriter): void;
   $syncFns$: string[];
 
   $eventQrls$: Set<QRL>;
@@ -144,7 +145,7 @@ class SerializationContextImpl implements SerializationContext {
     public $symbolToChunkResolver$: SymbolToChunkResolver,
     public $setProp$: (obj: any, prop: string, value: any) => void,
     public $storeProxyMap$: ObjToProxyMap,
-    public $writer$: StreamWriter
+    public $writer$: SSRInternalStreamWriter
   ) {
     this.$serializer$ = new Serializer(this);
   }
@@ -161,7 +162,7 @@ class SerializationContextImpl implements SerializationContext {
     return await this.$serializer$.serializePatch(rootStart, rootIds, extraRootId);
   }
 
-  $setWriter$(writer: StreamWriter): void {
+  $setWriter$(writer: SSRInternalStreamWriter): void {
     this.$writer$ = writer;
     this.$serializer$.$setWriter$(writer);
   }
@@ -323,25 +324,18 @@ export const createSerializationContext = (
   symbolToChunkResolver: SymbolToChunkResolver,
   setProp: (obj: any, prop: string, value: any) => void,
   storeProxyMap: ObjToProxyMap,
-  writer?: StreamWriter
+  writer?: SSRInternalStreamWriter
 ): SerializationContext => {
   if (!writer) {
     const buffer: string[] = [];
-    writer = {
-      write: (text: string) => {
+    writer = Object.assign(
+      createStringStreamWriter((text: string) => {
         buffer.push(text);
-      },
-      writeRootRef: (id: number) => {
-        buffer.push(String(id));
-      },
-      writeRootRefPath: (path: number[]) => {
-        buffer.push(String(path[0]));
-        for (let i = 1; i < path.length; i++) {
-          buffer.push(' ' + path[i]);
-        }
-      },
-      toString: () => buffer.join(''),
-    } as StreamWriter;
+      }),
+      {
+        toString: () => buffer.join(''),
+      }
+    );
   }
 
   isDomRef = (

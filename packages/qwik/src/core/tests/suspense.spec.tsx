@@ -33,16 +33,17 @@ import { delay } from '../shared/utils/promises';
 import { getScopedStyles } from '../shared/utils/scoped-stylesheet';
 import * as logUtils from '../shared/utils/log';
 import { renderToStream } from '../../server/ssr-render';
-import { createStringStreamWriter } from '../../server/ssr-stream-writer';
+import type { StreamWriter } from '../../server/types';
 import { cleanupAttrs } from '../../testing/element-fixture';
 
 const debug = false; //true;
 Error.stackTraceLimit = 100;
 
-const collectStream = (chunks: string[]) =>
-  createStringStreamWriter((chunk) => {
+const collectStream = (chunks: string[]): StreamWriter => ({
+  write(chunk) {
     chunks.push(chunk);
-  });
+  },
+});
 
 const loading = '<div style="display:contents"><span>Loading...</span></div>';
 const OOOS_SCOPED_STYLE = `.ooos-scoped { color: red; }`;
@@ -1084,15 +1085,17 @@ describe('renderToStream: out-of-order Suspense', () => {
     const renderPromise = renderToStream(<App />, {
       containerTagName: 'div',
       qwikLoader: 'never',
-      stream: createStringStreamWriter((chunk) => {
-        chunks.push(chunk);
-        flushes++;
-        if (flushes === 1) {
-          return new Promise<void>((resolve) => {
-            releaseFirstFlush = resolve;
-          });
-        }
-      }),
+      stream: {
+        write(chunk) {
+          chunks.push(chunk);
+          flushes++;
+          if (flushes === 1) {
+            return new Promise<void>((resolve) => {
+              releaseFirstFlush = resolve;
+            });
+          }
+        },
+      },
       streaming: {
         inOrder: { strategy: 'disabled' },
         outOfOrder: { strategy: 'suspense' },

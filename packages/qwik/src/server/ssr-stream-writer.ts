@@ -1,32 +1,11 @@
-import type { SSRWriteChunk, StreamWriter } from './qwik-types';
-
-export const writeStringRootRef = (writer: Pick<StreamWriter, 'write'>, id: number): void => {
-  writer.write(String(id));
-};
-
-export const writeStringRootRefPath = (
-  writer: Pick<StreamWriter, 'write'>,
-  path: number[]
-): void => {
-  writer.write(String(path[0]));
-  for (let i = 1; i < path.length; i++) {
-    writer.write(' ' + path[i]);
-  }
-};
-
-export const createStringStreamWriter = (
-  write: StreamWriter['write'],
-  waitForDrain?: StreamWriter['waitForDrain']
-): StreamWriter => ({
-  write,
-  writeRootRef(id) {
-    return writeStringRootRef(this, id);
-  },
-  writeRootRefPath(path) {
-    return writeStringRootRefPath(this, path);
-  },
-  waitForDrain,
-});
+import type { SSRInternalStreamWriter, SSRWriteChunk } from './qwik-types';
+export {
+  createStringStreamWriter,
+  stringifyRootRefPath,
+  writeStringRootRef,
+  writeStringRootRefPath,
+} from './qwik-copy';
+import { writeStringRootRef, writeStringRootRefPath } from './qwik-copy';
 
 export const renderSSRChunks = (chunks: SSRWriteChunk[], remap?: number[]): string => {
   let out = '';
@@ -47,7 +26,7 @@ export const renderSSRChunks = (chunks: SSRWriteChunk[], remap?: number[]): stri
   return out;
 };
 
-export class StringSSRWriter implements StreamWriter {
+export class StringSSRWriter implements SSRInternalStreamWriter {
   private buffer = [] as string[];
   write(text: string) {
     this.buffer.push(text);
@@ -66,7 +45,7 @@ export class StringSSRWriter implements StreamWriter {
   }
 }
 
-export class StringBufferSegmentWriter extends StringSSRWriter {
+export class StringBufferSegmentWriter implements SSRInternalStreamWriter {
   private chunks: SSRWriteChunk[] = [];
   write(text: string) {
     this.chunks.push(text);

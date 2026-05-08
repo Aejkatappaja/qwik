@@ -24,12 +24,15 @@ export interface SSRRootRefPathChunk {
 /** @internal */
 export type SSRWriteChunk = string | number | SSRRootRefPathChunk;
 
-/** @internal */
+/** @public */
 export interface StreamWriter {
   write(chunk: string): ValueOrPromise<void>;
+}
+
+/** @internal */
+export interface SSRInternalStreamWriter extends StreamWriter {
   writeRootRef(id: number): ValueOrPromise<void>;
   writeRootRefPath(path: number[]): ValueOrPromise<void>;
-  waitForDrain?(): ValueOrPromise<void>;
 }
 
 export interface ISsrNode {
@@ -90,7 +93,7 @@ export interface SSRContainer extends Container {
   readonly tag: string;
   readonly isHtml: boolean;
   readonly size: number;
-  readonly writer: StreamWriter;
+  readonly writer: SSRInternalStreamWriter;
   readonly streamHandler: IStreamHandler;
   readonly serializationCtx: SerializationContext;
   readonly symbolToChunkResolver: SymbolToChunkResolver;

@@ -90,10 +90,10 @@ import {
   type Props,
   type SerializationContext,
   type SignalImpl,
+  type SSRInternalStreamWriter,
   type SSROutOfOrderSegment,
   type SSRRenderJSXOptions,
   type SSRWriteChunk,
-  type StreamWriter,
   type SymbolToChunkResolver,
   type ValueOrPromise,
 } from './qwik-types';
@@ -228,7 +228,7 @@ const QTemplateProps = {
 class SSRContainer extends _SharedContainer implements ISSRContainer {
   public tag: string;
   public isHtml: boolean;
-  public writer: StreamWriter;
+  public writer: SSRInternalStreamWriter;
   public streamHandler: IStreamHandler;
   public timing: RenderToStreamResult['timing'];
   public size = 0;

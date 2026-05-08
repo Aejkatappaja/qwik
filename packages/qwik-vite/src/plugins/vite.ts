@@ -315,7 +315,7 @@ export function qwikVite(qwikViteOpts: QwikVitePluginOptions = {}): any {
           // The optimizer replaces __EXPERIMENTAL__.x while transforming source files.
           // Library-built Qwik dist keeps those checks unbaked, so app bundling needs
           // the same defines for prebuilt core modules that Vite includes directly.
-          ...getExperimentalFeatureDefines(opts.experimental),
+          ...(target === 'lib' ? {} : getExperimentalFeatureDefines(opts.experimental)),
         },
       };
 

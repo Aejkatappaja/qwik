@@ -74,6 +74,12 @@ export { ChoreBits } from '../core/shared/vnode/enums/chore-bits.enum';
 export { isHtmlAttributeAnEventName, isPreventDefault } from '../core/shared/utils/event-names';
 export { ITERATION_ITEM_SINGLE, ITERATION_ITEM_MULTI } from '../core/shared/utils/markers';
 export { isObjectEmpty } from '../core/shared/utils/objects';
+export {
+  createStringStreamWriter,
+  stringifyRootRefPath,
+  writeStringRootRef,
+  writeStringRootRefPath,
+} from '../core/ssr/stream-writer';
 export type {
   OutOfOrderRevealBoundary,
   OutOfOrderRevealCoordinator,

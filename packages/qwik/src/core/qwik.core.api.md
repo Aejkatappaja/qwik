@@ -966,8 +966,6 @@ export interface RenderSSROptions {
     manifestHash: string;
     // (undocumented)
     serverData?: Record<string, any>;
-    // Warning: (ae-incompatible-release-tags) The symbol "stream" is marked as @public, but its signature references "StreamWriter" which is marked as @internal
-    //
     // (undocumented)
     stream: StreamWriter;
 }
@@ -1062,8 +1060,10 @@ export function _serialize<T>(data: T): Promise<string>;
 // @public
 export const SerializerSymbol: unique symbol;
 
+// Warning: (ae-forgotten-export) The symbol "SSRWriteChunk" needs to be exported by the entry point index.d.ts
+//
 // @internal (undocumented)
-export function _setEvent(serializationCtx: SerializationContext, key: string, rawValue: unknown, hasMovedCaptures: boolean): string | null;
+export function _setEvent(serializationCtx: SerializationContext, key: string, rawValue: unknown, hasMovedCaptures: boolean): string | SSRWriteChunk[] | null;
 
 // @public
 export const setPlatform: (plt: CorePlatform) => CorePlatform;
@@ -1236,12 +1236,8 @@ export interface SSRStreamWriter {
     write(chunk: JSXOutput): void;
 }
 
-// Warning: (ae-internal-missing-underscore) The name "StreamWriter" should be prefixed with an underscore because the declaration is marked as @internal
-//
-// @internal (undocumented)
+// @public (undocumented)
 export interface StreamWriter {
-    // (undocumented)
-    waitForDrain?(): ValueOrPromise<void>;
     // (undocumented)
     write(chunk: string): ValueOrPromise<void>;
 }
@@ -1256,6 +1252,17 @@ export class _SubscriptionData {
     //
     // (undocumented)
     data: NodePropData;
+}
+
+// @internal (undocumented)
+export class _SubscriptionPatch {
+    constructor(rootId?: number, subscriptions?: Set<EffectSubscription> | Map<string | symbol, Set<EffectSubscription>>);
+    // (undocumented)
+    rootId: number;
+    // Warning: (ae-forgotten-export) The symbol "EffectSubscription" needs to be exported by the entry point index.d.ts
+    //
+    // (undocumented)
+    subscriptions: Set<EffectSubscription> | Map<string | symbol, Set<EffectSubscription>>;
 }
 
 // @internal (undocumented)

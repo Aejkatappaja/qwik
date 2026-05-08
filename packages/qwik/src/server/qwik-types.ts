@@ -26,6 +26,7 @@ export type {
   ISsrNode,
   SSRRootRefPathChunk,
   SSRContainer,
+  SSRInternalStreamWriter,
   SSROutOfOrderSegment,
   SSRRenderJSXOptions,
   SSRWriteChunk,

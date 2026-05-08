@@ -3,7 +3,11 @@ import { trackSignalAndAssignHost } from '../use/use-core';
 import { version } from '../version';
 import type { SubscriptionData } from '../reactive-primitives/subscription-data';
 import type { Signal } from '../reactive-primitives/signal.public';
-import type { StreamWriter, SymbolToChunkResolver } from '../ssr/ssr-types';
+import type {
+  SSRInternalStreamWriter,
+  StreamWriter,
+  SymbolToChunkResolver,
+} from '../ssr/ssr-types';
 import {
   createSerializationContext,
   type SerializationContext,
@@ -61,7 +65,7 @@ export abstract class _SharedContainer implements Container {
       symbolToChunkResolver,
       this.setHostProp.bind(this),
       this.$storeProxyMap$,
-      writer
+      writer as SSRInternalStreamWriter | undefined
     );
   }
 

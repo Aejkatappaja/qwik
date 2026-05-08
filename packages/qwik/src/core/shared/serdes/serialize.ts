@@ -19,7 +19,7 @@ import {
 } from '../../reactive-primitives/types';
 import { isSerializerObj } from '../../reactive-primitives/utils';
 import { Task } from '../../use/use-task';
-import type { SSRWriteChunk, StreamWriter } from '../../ssr/ssr-types';
+import type { SSRInternalStreamWriter, SSRWriteChunk } from '../../ssr/ssr-types';
 import { isQwikComponent, SERIALIZABLE_STATE } from '../component.public';
 import { qError, QError } from '../error/error';
 import { isJSXNode } from '../jsx/jsx-node';
@@ -69,7 +69,7 @@ export class Serializer {
   private $parent$: SeenRef | undefined;
   private $qrlMap$ = new Map<string, QRLInternal>();
   private $streamedRootLimit$ = 0;
-  private $writer$: StreamWriter;
+  private $writer$: SSRInternalStreamWriter;
   /** We need to determine this at runtime because polyfills may not be loaded a module load time */
   private $hasTemporal$ = typeof Temporal !== 'undefined';
 
@@ -128,7 +128,7 @@ export class Serializer {
     this.$writer$.write(BRACKET_CLOSE);
   }
 
-  $setWriter$(writer: StreamWriter): void {
+  $setWriter$(writer: SSRInternalStreamWriter): void {
     this.$writer$ = writer;
   }
 
@@ -841,7 +841,7 @@ export class Serializer {
       } catch {
         // ignore rejections, they will be serialized as rejected promises
       }
-      for (; this.$rootIdx$ < this.$serializationContext$.$roots$.length; this.$rootIdx$++) {}
+      this.$rootIdx$ = this.$serializationContext$.$roots$.length;
     }
   }
 
@@ -938,6 +938,7 @@ const discoverValuesForVNodeData = (vnodeData: VNodeData, callback: (value: unkn
         if (
           attrValue == null ||
           typeof attrValue === 'string' ||
+          (typeof attrValue === 'number' && key === ELEMENT_ID) ||
           (key === ELEMENT_PROPS && isObjectEmpty(attrValue as Record<string, unknown>))
         ) {
           continue;
