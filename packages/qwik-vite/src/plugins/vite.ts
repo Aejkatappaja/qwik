@@ -27,8 +27,8 @@ import {
   QWIK_JSX_DEV_RUNTIME_ID,
   QWIK_JSX_RUNTIME_ID,
   TRANSFORM_REGEX,
-  ExperimentalFeatures,
   createQwikPlugin,
+  type ExperimentalFeatures,
   type NormalizedQwikPluginOptions,
   type QwikBuildMode,
   type QwikBuildTarget,
@@ -119,7 +119,6 @@ export function qwikVite(qwikViteOpts: QwikVitePluginOptions = {}): any {
   let viteAssetsDir: string | undefined;
   let srcDir: string | null = null;
   let rootDir: string | null = null;
-  let experimentalDefines: Record<string, string> | null = null;
 
   let ssrOutDir: string | null = null;
   let buildMode: QwikBuildMode = 'development';
@@ -242,8 +241,6 @@ export function qwikVite(qwikViteOpts: QwikVitePluginOptions = {}): any {
 
       const opts = await qwikPlugin.normalizeOptions(pluginOpts);
       input ||= opts.input;
-      experimentalDefines =
-        target === 'lib' ? null : getExperimentalFeatureDefines(opts.experimental);
 
       // Cache pluginOpts for use in configResolved()
       cachedPluginOpts = pluginOpts;
@@ -329,10 +326,6 @@ export function qwikVite(qwikViteOpts: QwikVitePluginOptions = {}): any {
           [qDevKey]: qDev,
           [qInspectorKey]: qInspector,
           [qTestKey]: JSON.stringify(process.env.NODE_ENV === 'test'),
-          // The optimizer replaces __EXPERIMENTAL__.x while transforming source files.
-          // Library-built Qwik dist keeps those checks unbaked, so app bundling needs
-          // the same defines for prebuilt core modules that Vite includes directly.
-          ...(experimentalDefines ?? {}),
         },
       };
 
@@ -385,7 +378,6 @@ export function qwikVite(qwikViteOpts: QwikVitePluginOptions = {}): any {
         } else {
           // Test Build
           updatedViteConfig.define = {
-            ...updatedViteConfig.define,
             [qDevKey]: true,
             [qTestKey]: true,
             [qInspectorKey]: false,
@@ -401,15 +393,11 @@ export function qwikVite(qwikViteOpts: QwikVitePluginOptions = {}): any {
     },
 
     configEnvironment(name: string, _config: EnvironmentOptions, _env: ConfigEnv) {
-      const experimentalDefineConfig = experimentalDefines
-        ? ({ define: experimentalDefines } satisfies Pick<EnvironmentOptions, 'define'>)
-        : {};
       // Use environment name to distinguish server vs client — config.consumer is not yet set
       // at the time this hook is called.
       const isServer = name === 'ssr';
       if (isServer) {
         return {
-          ...experimentalDefineConfig,
           resolve: {
             noExternal: [QWIK_CORE_ID, QWIK_CORE_INTERNAL_ID, QWIK_CORE_SERVER, QWIK_BUILD_ID],
           },
@@ -419,13 +407,12 @@ export function qwikVite(qwikViteOpts: QwikVitePluginOptions = {}): any {
       // adapter-provided conditions (e.g. ['webworker', 'worker'] for edge adapters).
       if (buildMode === 'production') {
         return {
-          ...experimentalDefineConfig,
           resolve: {
             conditions: ['min'],
           },
         } satisfies EnvironmentOptions;
       }
-      return experimentalDefineConfig satisfies EnvironmentOptions;
+      return {};
     },
 
     async configResolved(config) {
@@ -949,18 +936,6 @@ async function checkExternals() {
       },
     },
   } as const satisfies VitePlugin<never>;
-}
-
-function getExperimentalFeatureDefines(
-  experimental: NormalizedQwikPluginOptions['experimental']
-): Record<string, string> {
-  const defines: Record<string, string> = {};
-  const features = Object.values(ExperimentalFeatures) as (keyof typeof ExperimentalFeatures)[];
-  for (let i = 0; i < features.length; i++) {
-    const feature = features[i];
-    defines[`__EXPERIMENTAL__.${feature}`] = JSON.stringify(!!experimental?.[feature]);
-  }
-  return defines;
 }
 
 const ANSI_COLOR = {

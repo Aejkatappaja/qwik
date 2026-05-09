@@ -3,12 +3,7 @@ import type { Rollup } from 'vite';
 import { assert, describe, test } from 'vitest';
 import { normalizePath } from '../../../qwik/src/testing/util';
 import type { OptimizerOptions } from '../types';
-import {
-  ExperimentalFeatures,
-  qwikVite,
-  type QwikVitePlugin,
-  type QwikVitePluginOptions,
-} from './vite';
+import { qwikVite, type QwikVitePlugin, type QwikVitePluginOptions } from './vite';
 import {
   createBuildWorkerCoreChunkResolver,
   createBuildWorkerQrlChunkResolver,
@@ -72,7 +67,6 @@ const excludeDeps = [
 
 const getPlugin = (opts: QwikVitePluginOptions | undefined) =>
   (qwikVite(opts) as any)[0] as QwikVitePlugin;
-const experimentalDefineKey = (feature: ExperimentalFeatures) => `__EXPERIMENTAL__.${feature}`;
 
 // undefined for Vite 5 - 6, an object for Vite 7
 const configHookPluginContext = undefined as any;
@@ -123,38 +117,8 @@ test('command: serve, mode: development', async () => {
   assert.deepEqual(build.ssr, undefined);
   assert.deepEqual(c.optimizeDeps?.include, includeDeps);
   assert.deepEqual(c.optimizeDeps?.exclude, excludeDeps);
-  assert.deepEqual(c.define?.[experimentalDefineKey(ExperimentalFeatures.suspense)], 'false');
 
   assert.deepEqual(c.ssr?.noExternal, noExternal);
-});
-
-test('defines experimental feature replacements', async () => {
-  const initOpts = {
-    optimizerOptions: mockOptimizerOptions(),
-    experimental: [ExperimentalFeatures.suspense],
-  };
-  const plugin = getPlugin(initOpts);
-  const c = (await plugin.config.call(
-    configHookPluginContext,
-    {},
-    { command: 'build', mode: 'production' }
-  ))!;
-
-  assert.deepEqual(c.define?.[experimentalDefineKey(ExperimentalFeatures.suspense)], 'true');
-  assert.deepEqual(c.define?.[experimentalDefineKey(ExperimentalFeatures.each)], 'false');
-
-  const testPlugin = getPlugin(initOpts);
-  const testConfig = (await testPlugin.config.call(
-    configHookPluginContext,
-    {},
-    { command: 'serve', mode: 'test' }
-  ))!;
-
-  assert.deepEqual(
-    testConfig.define?.[experimentalDefineKey(ExperimentalFeatures.suspense)],
-    'true'
-  );
-  assert.deepEqual(testConfig.define?.[experimentalDefineKey(ExperimentalFeatures.each)], 'false');
 });
 
 test('command: serve, mode: production', async () => {
@@ -749,10 +713,7 @@ describe('clientPublicOutDir', () => {
 
 describe('configEnvironment', () => {
   test('should set noExternal for server environments', async () => {
-    const plugin = getPlugin({
-      optimizerOptions: mockOptimizerOptions(),
-      experimental: [ExperimentalFeatures.suspense],
-    });
+    const plugin = getPlugin({ optimizerOptions: mockOptimizerOptions() });
     // Initialize the plugin first
     await plugin.config.call(
       configHookPluginContext,
@@ -765,25 +726,18 @@ describe('configEnvironment', () => {
 
     const result = hook('ssr', { consumer: 'server' }, { command: 'serve', mode: 'development' });
     assert.deepEqual(result.resolve.noExternal, noExternal);
-    assert.deepEqual(result.define?.[experimentalDefineKey(ExperimentalFeatures.suspense)], 'true');
-    assert.deepEqual(result.define?.[experimentalDefineKey(ExperimentalFeatures.each)], 'false');
   });
 
   test('should set resolve conditions for client environments in production', async () => {
-    const plugin = getPlugin({
-      optimizerOptions: mockOptimizerOptions(),
-      experimental: [ExperimentalFeatures.suspense],
-    });
+    const plugin = getPlugin({ optimizerOptions: mockOptimizerOptions() });
     await plugin.config.call(configHookPluginContext, {}, { command: 'build', mode: 'production' });
 
     const hook = (plugin as any).configEnvironment;
     const result = hook('client', { consumer: 'client' }, { command: 'build', mode: 'production' });
     assert.deepEqual(result.resolve.conditions, ['min']);
-    assert.deepEqual(result.define?.[experimentalDefineKey(ExperimentalFeatures.suspense)], 'true');
-    assert.deepEqual(result.define?.[experimentalDefineKey(ExperimentalFeatures.each)], 'false');
   });
 
-  test('should not set resolve conditions for client environments in development', async () => {
+  test('should return empty config for client environments in development', async () => {
     const plugin = getPlugin({ optimizerOptions: mockOptimizerOptions() });
     await plugin.config.call(
       configHookPluginContext,
@@ -798,12 +752,8 @@ describe('configEnvironment', () => {
       { command: 'serve', mode: 'development' }
     );
     // In development, we don't set conditions to avoid overriding adapter-provided conditions
-    // (e.g. ['webworker', 'worker'] for edge adapters).
-    assert.deepEqual(result.resolve, undefined);
-    assert.deepEqual(
-      result.define?.[experimentalDefineKey(ExperimentalFeatures.suspense)],
-      'false'
-    );
+    // (e.g. ['webworker', 'worker'] for edge adapters). Empty object is the correct result.
+    assert.deepEqual(result, {});
   });
 });
 
