@@ -11,6 +11,7 @@ interface MessageBase {
 
 export interface InitSSRMessage extends MessageBase {
   type: 'run-ssr';
+  requestId: number;
   replId: string;
   entry: string;
   baseUrl: string;
@@ -25,17 +26,20 @@ export interface SSRReadyMessage extends MessageBase {
 
 export interface SSRResultMessage extends MessageBase {
   type: 'ssr-result';
+  requestId: number;
   html: string;
   events: any[];
 }
 
 export interface SSRChunkMessage extends MessageBase {
   type: 'ssr-chunk';
+  requestId: number;
   html: string;
 }
 
 export interface SSRErrorMessage extends MessageBase {
   type: 'ssr-error';
+  requestId: number;
   error: string;
   stack?: string;
 }
@@ -59,6 +63,7 @@ self.onmessage = async (e: MessageEvent<IncomingMessage>) => {
         const result = await executeSSR(e.data);
         const message: SSRResultMessage = {
           type: 'ssr-result',
+          requestId: e.data.requestId,
           html: result.html,
           events: result.events,
         };
@@ -67,6 +72,7 @@ self.onmessage = async (e: MessageEvent<IncomingMessage>) => {
         console.error(`SSR worker for %s failed`, replId, error);
         const message: SSRErrorMessage = {
           type: 'ssr-error',
+          requestId: e.data.requestId,
           error: (error as Error)?.message || String(error),
           stack: (error as Error)?.stack,
         };
@@ -126,7 +132,11 @@ async function executeSSR(message: InitSSRMessage): Promise<{ html: string; even
       write(chunk: string) {
         chunks.push(chunk);
         if (message.streamHtml) {
-          self.postMessage({ type: 'ssr-chunk', html: chunk } as SSRChunkMessage);
+          self.postMessage({
+            type: 'ssr-chunk',
+            requestId: message.requestId,
+            html: chunk,
+          } as SSRChunkMessage);
         }
       },
     },
