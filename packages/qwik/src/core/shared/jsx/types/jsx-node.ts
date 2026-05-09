@@ -1,5 +1,4 @@
 import type { Props } from '../jsx-runtime';
-import type { ValueOrPromise } from '../../utils/types';
 import type { JSXChildren } from './jsx-qwik-attributes';
 
 /**
@@ -17,7 +16,7 @@ export type JSXOutput = JSXNode | string | number | boolean | null | undefined |
  * @public
  */
 export type FunctionComponent<P = unknown> = {
-  renderFn(props: P, key: string | null, flags: number, dev?: DevJSX): ValueOrPromise<JSXOutput>;
+  renderFn(props: P, key: string | null, flags: number, dev?: DevJSX): JSXOutput;
 }['renderFn'];
 
 /** @public */

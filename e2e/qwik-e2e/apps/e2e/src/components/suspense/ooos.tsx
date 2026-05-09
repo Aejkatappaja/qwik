@@ -198,13 +198,17 @@ export const SlowOutOfOrderContent = component$(() => {
   if (isServer) {
     const releaseId = getSearchParam(url, 'release');
     if (releaseId && requestId) {
-      return waitForOutOfOrderRelease(requestId, releaseId, <ResolvedOutOfOrderContent />);
+      return waitForOutOfOrderRelease(
+        requestId,
+        releaseId,
+        <ResolvedOutOfOrderContent />
+      ) as unknown as JSXOutput;
     }
     const params = url ? new URL(url).searchParams : null;
     const delay = Number(params?.get('delay') || 1000);
     return new Promise<JSXOutput>((resolve) => {
       setTimeout(() => resolve(<ResolvedOutOfOrderContent />), delay);
-    });
+    }) as unknown as JSXOutput;
   }
   return <ResolvedOutOfOrderContent />;
 });
@@ -355,11 +359,11 @@ export const RerenderOutOfOrderContent = component$((props: { value: number }) =
         requestId,
         releaseId,
         <RerenderOutOfOrderPanel value={props.value} />
-      );
+      ) as unknown as JSXOutput;
     }
     return new Promise<JSXOutput>((resolve) => {
       setTimeout(() => resolve(<RerenderOutOfOrderPanel value={props.value} />), 1000);
-    });
+    }) as unknown as JSXOutput;
   }
   return <RerenderOutOfOrderPanel value={props.value} />;
 });
@@ -394,14 +398,14 @@ export const ControlledOutOfOrderContent = component$<ControlledOutOfOrderConten
         requestId,
         releaseId,
         <ResolvedOutOfOrderPanel id={props.id} label={props.label} />
-      );
+      ) as unknown as JSXOutput;
     }
     return new Promise<JSXOutput>((resolve) => {
       setTimeout(
         () => resolve(<ResolvedOutOfOrderPanel id={props.id} label={props.label} />),
         1000
       );
-    });
+    }) as unknown as JSXOutput;
   }
   return <ResolvedOutOfOrderPanel id={props.id} label={props.label} />;
 });
@@ -455,11 +459,11 @@ export const CrossStateContent = component$<{ shared: Signal<number> }>((props) 
         requestId,
         releaseId,
         <CrossStateResolved shared={props.shared} />
-      );
+      ) as unknown as JSXOutput;
     }
     return new Promise<JSXOutput>((resolve) => {
       setTimeout(() => resolve(<CrossStateResolved shared={props.shared} />), 1000);
-    });
+    }) as unknown as JSXOutput;
   }
   return <CrossStateResolved shared={props.shared} />;
 });

@@ -25,7 +25,7 @@ describe('types', () => {
   // make sure the type check runs.
   test('basic', () => () => {
     expectTypeOf(<div />).toEqualTypeOf<JSXOutput>();
-    expectTypeOf<QRLEventHandlerMulti<PointerEvent, HTMLDivElement>>().toExtend<
+    expectTypeOf<QRLEventHandlerMulti<PointerEvent, HTMLDivElement>>().toMatchTypeOf<
       QwikIntrinsicElements['div']['onAuxClick$']
     >();
     expectTypeOf<QwikIntrinsicElements['li']['children']>().toEqualTypeOf<JSXChildren>();
@@ -106,7 +106,7 @@ describe('types', () => {
         />
       );
     });
-    expectTypeOf<Parameters<typeof Cmp>[0]['onClick$']>().toExtend<
+    expectTypeOf<Parameters<typeof Cmp>[0]['onClick$']>().toMatchTypeOf<
       EventHandler<PointerEvent, SVGSVGElement> | QRLEventHandlerMulti<PointerEvent, SVGSVGElement>
     >();
 
@@ -115,16 +115,6 @@ describe('types', () => {
         <Cmp />
       </p>
     );
-  });
-
-  test('promise output', () => () => {
-    const AsyncNoProps = component$(() => Promise.resolve(<div />));
-    const AsyncWithProps = component$<{ value: string }>((props) =>
-      Promise.resolve(<span>{props.value}</span>)
-    );
-
-    expectTypeOf(AsyncNoProps).toEqualTypeOf<FunctionComponent<PublicProps<unknown>>>();
-    expectTypeOf(AsyncWithProps).toEqualTypeOf<FunctionComponent<PublicProps<{ value: string }>>>();
   });
 
   test('PropFunction', () => () => {
@@ -152,13 +142,13 @@ describe('types', () => {
 
   test('inferring', () => () => {
     // Popover API
-    expectTypeOf<PropsOf<'button'>>().toExtend<{
+    expectTypeOf<PropsOf<'button'>>().toMatchTypeOf<{
       popovertarget?: string;
     }>();
     expectTypeOf<{
       type: 'button';
       popovertarget?: string;
-    }>().toExtend<PropsOf<'input'>>();
+    }>().toMatchTypeOf<PropsOf<'input'>>();
 
     $((_, element) => {
       element.select();
@@ -250,27 +240,29 @@ describe('types', () => {
 
   test('FunctionComponent', () => () => {
     const Cmp = component$((props: { foo: string }) => null);
-    expectTypeOf(Cmp).toExtend<FunctionComponent<{ foo: string }>>();
-    expectTypeOf<FunctionComponent<{ foo: string }>>().toExtend<typeof Cmp>();
+    expectTypeOf(Cmp).toMatchTypeOf<FunctionComponent<{ foo: string }>>();
+    expectTypeOf<FunctionComponent<{ foo: string }>>().toMatchTypeOf(Cmp);
 
-    expectTypeOf((p: { hi: number }) => <span>{p.hi}</span>).toExtend<FunctionComponent>();
-    expectTypeOf((p: { hi: number }) => <span>{p.hi}</span>).toExtend<
+    expectTypeOf((p: { hi: number }) => <span>{p.hi}</span>).toMatchTypeOf<FunctionComponent>();
+    expectTypeOf((p: { hi: number }) => <span>{p.hi}</span>).toMatchTypeOf<
       FunctionComponent<{ hi: number }>
     >();
-    expectTypeOf((p: { hi: number }) => <span>{p.hi}</span>).not.toExtend<
+    expectTypeOf((p: { hi: number }) => <span>{p.hi}</span>).not.toMatchTypeOf<
       FunctionComponent<{ hi: string }>
     >();
-    expectTypeOf((p: { hi: number }) => <span>{p.hi}</span>).not.toExtend<
+    expectTypeOf((p: { hi: number }) => <span>{p.hi}</span>).not.toMatchTypeOf<
       FunctionComponent<{ meep: string }>
     >();
-    expectTypeOf((p: { hi: number }) => `${p.hi}`).toExtend<FunctionComponent<{ hi: number }>>();
-    expectTypeOf((p: { hi: number }) => p.hi).toExtend<FunctionComponent<{ hi: number }>>();
-    expectTypeOf((p: { hi?: number | boolean | null }) => p.hi).toExtend<
+    expectTypeOf((p: { hi: number }) => `${p.hi}`).toMatchTypeOf<
       FunctionComponent<{ hi: number }>
     >();
-    expectTypeOf(() => null).toExtend<FunctionComponent<{ hi: number }>>();
+    expectTypeOf((p: { hi: number }) => p.hi).toMatchTypeOf<FunctionComponent<{ hi: number }>>();
+    expectTypeOf((p: { hi?: number | boolean | null }) => p.hi).toMatchTypeOf<
+      FunctionComponent<{ hi: number }>
+    >();
+    expectTypeOf(() => null).toMatchTypeOf<FunctionComponent<{ hi: number }>>();
 
-    expectTypeOf(() => new Date()).not.toExtend<FunctionComponent>();
+    expectTypeOf(() => new Date()).not.toMatchTypeOf<FunctionComponent>();
   });
 
   test('PropsOf', () => () => {
@@ -285,7 +277,7 @@ describe('types', () => {
     expectTypeOf<PropsOf<typeof UnknownProps>>().toEqualTypeOf<never>();
     expectTypeOf<PropsOf<typeof AnyProps>>().toEqualTypeOf<any>();
     expectTypeOf<PropsOf<typeof DefProps>>().toEqualTypeOf<{ foo: string }>();
-    expectTypeOf<PropsOf<typeof PolyProps<'hi'>>>().toExtend<{
+    expectTypeOf<PropsOf<typeof PolyProps<'hi'>>>().toMatchTypeOf<{
       as?: 'hi';
       b: boolean;
       foo: boolean;
@@ -296,7 +288,7 @@ describe('types', () => {
     expectTypeOf<PropsOf<typeof UnknownProps$>>().toEqualTypeOf<never>();
     expectTypeOf<PropsOf<typeof AnyProps$>>().toEqualTypeOf<any>();
     expectTypeOf<PropsOf<typeof DefProps$>>().toEqualTypeOf<{ foo: string }>();
-    expectTypeOf<PropsOf<typeof PolyProps$<'hi'>>>().toExtend<{
+    expectTypeOf<PropsOf<typeof PolyProps$<'hi'>>>().toMatchTypeOf<{
       as?: 'hi';
       b: boolean;
       foo: boolean;

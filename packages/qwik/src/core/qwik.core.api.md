@@ -444,7 +444,7 @@ export const Fragment: FunctionComponent<{
 
 // @public
 export type FunctionComponent<P = unknown> = {
-    renderFn(props: P, key: string | null, flags: number, dev?: DevJSX): ValueOrPromise<JSXOutput>;
+    renderFn(props: P, key: string | null, flags: number, dev?: DevJSX): JSXOutput;
 }['renderFn'];
 
 // @internal (undocumented)
@@ -707,7 +707,7 @@ export const noSerialize: <T extends object | undefined>(input: T) => NoSerializ
 export const NoSerializeSymbol: unique symbol;
 
 // @public (undocumented)
-export type OnRenderFn<PROPS> = (props: PROPS) => ValueOrPromise<JSXOutput>;
+export type OnRenderFn<PROPS> = (props: PROPS) => JSXOutput;
 
 // @public (undocumented)
 export interface OnVisibleTaskOptions {

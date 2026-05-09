@@ -14,7 +14,6 @@ import { qTest } from './utils/qdev';
 import { assertQrl } from './qrl/qrl-utils';
 import { isDev } from '@qwik.dev/core/build';
 import type { QRLInternal } from './qrl/qrl-class';
-import type { ValueOrPromise } from './utils/types';
 
 // TS way to check for any
 type IsAny<T> = 0 extends T & 1 ? true : false;
@@ -215,4 +214,4 @@ export const component$ = <PROPS = unknown>(onMount: OnRenderFn<PROPS>): Compone
 };
 
 /** @public */
-export type OnRenderFn<PROPS> = (props: PROPS) => ValueOrPromise<JSXOutput>;
+export type OnRenderFn<PROPS> = (props: PROPS) => JSXOutput;
