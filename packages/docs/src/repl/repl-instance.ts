@@ -18,30 +18,7 @@ import type {
 } from './bundler/repl-ssr-worker';
 import ssrWorkerUrl from './bundler/repl-ssr-worker?worker&url';
 import listenerScript from './bundler/client-events-listener?compiled-string';
-
-const replPreviewStyle = `<style data-repl-preview-font>
-html, body {
-  font-family: sans-serif;
-}
-
-body,
-button,
-input,
-select,
-textarea {
-  font: inherit;
-}
-</style>`;
-
-const injectPreviewStyle = (html: string) => {
-  if (/<\/head>/i.test(html)) {
-    return html.replace(/<\/head>/i, `${replPreviewStyle}</head>`);
-  }
-  if (/<body[^>]*>/i.test(html)) {
-    return html.replace(/<body([^>]*)>/i, `<body$1>${replPreviewStyle}`);
-  }
-  return replPreviewStyle + html;
-};
+import { createPreviewStyleInjector, injectPreviewStyle } from './repl-preview-html';
 
 const isPreviewHtmlRequest = (url: string) => {
   const match = url.match(/\/repl\/client\/[a-z0-9]+\/(.*)/);
@@ -253,18 +230,23 @@ export class ReplInstance {
 
     let ssrChunkCount = 0;
     const writeChunk = (body: string) => {
-      channel!.postMessage({
-        type: 'repl-stream-chunk',
-        requestId,
-        body,
-      });
+      if (body) {
+        channel!.postMessage({
+          type: 'repl-stream-chunk',
+          requestId,
+          body,
+        });
+      }
     };
+    const previewStyleInjector = createPreviewStyleInjector();
     const ssrResult = await this.executeSSR(this.lastResult, (html) => {
       ssrChunkCount++;
-      writeChunk(html);
+      writeChunk(previewStyleInjector.write(html));
     });
     if (ssrChunkCount === 0) {
       writeChunk(injectPreviewStyle(ssrResult.html));
+    } else {
+      writeChunk(previewStyleInjector.flush());
     }
     channel!.postMessage({
       type: 'repl-stream-chunk',
