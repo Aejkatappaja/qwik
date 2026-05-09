@@ -29,7 +29,7 @@ export const parsePlaygroundShareUrl = (shareable: string) => {
         data.entryStrategy = entryStrategy;
       }
 
-      data.outOfOrderStreaming = params.get('outOfOrder') === '1';
+      data.outOfOrderStreaming = params.get('ooos') === '1' || params.get('outOfOrder') === '1';
 
       if (params.has('files')) {
         // Old URLs that didn't compress
@@ -133,7 +133,7 @@ export const createPlaygroundShareUrl = (data: PlaygroundShareUrl, pathname = '/
     params.set('entryStrategy', data.entryStrategy);
   }
   if (data.outOfOrderStreaming) {
-    params.set('outOfOrder', '1');
+    params.set('ooos', '1');
   }
 
   params.set('f', compressFiles(data.files));
