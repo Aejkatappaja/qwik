@@ -749,7 +749,10 @@ describe('clientPublicOutDir', () => {
 
 describe('configEnvironment', () => {
   test('should set noExternal for server environments', async () => {
-    const plugin = getPlugin({ optimizerOptions: mockOptimizerOptions() });
+    const plugin = getPlugin({
+      optimizerOptions: mockOptimizerOptions(),
+      experimental: [ExperimentalFeatures.suspense],
+    });
     // Initialize the plugin first
     await plugin.config.call(
       configHookPluginContext,
@@ -762,18 +765,25 @@ describe('configEnvironment', () => {
 
     const result = hook('ssr', { consumer: 'server' }, { command: 'serve', mode: 'development' });
     assert.deepEqual(result.resolve.noExternal, noExternal);
+    assert.deepEqual(result.define?.[experimentalDefineKey(ExperimentalFeatures.suspense)], 'true');
+    assert.deepEqual(result.define?.[experimentalDefineKey(ExperimentalFeatures.each)], 'false');
   });
 
   test('should set resolve conditions for client environments in production', async () => {
-    const plugin = getPlugin({ optimizerOptions: mockOptimizerOptions() });
+    const plugin = getPlugin({
+      optimizerOptions: mockOptimizerOptions(),
+      experimental: [ExperimentalFeatures.suspense],
+    });
     await plugin.config.call(configHookPluginContext, {}, { command: 'build', mode: 'production' });
 
     const hook = (plugin as any).configEnvironment;
     const result = hook('client', { consumer: 'client' }, { command: 'build', mode: 'production' });
     assert.deepEqual(result.resolve.conditions, ['min']);
+    assert.deepEqual(result.define?.[experimentalDefineKey(ExperimentalFeatures.suspense)], 'true');
+    assert.deepEqual(result.define?.[experimentalDefineKey(ExperimentalFeatures.each)], 'false');
   });
 
-  test('should return empty config for client environments in development', async () => {
+  test('should not set resolve conditions for client environments in development', async () => {
     const plugin = getPlugin({ optimizerOptions: mockOptimizerOptions() });
     await plugin.config.call(
       configHookPluginContext,
@@ -788,8 +798,12 @@ describe('configEnvironment', () => {
       { command: 'serve', mode: 'development' }
     );
     // In development, we don't set conditions to avoid overriding adapter-provided conditions
-    // (e.g. ['webworker', 'worker'] for edge adapters). Empty object is the correct result.
-    assert.deepEqual(result, {});
+    // (e.g. ['webworker', 'worker'] for edge adapters).
+    assert.deepEqual(result.resolve, undefined);
+    assert.deepEqual(
+      result.define?.[experimentalDefineKey(ExperimentalFeatures.suspense)],
+      'false'
+    );
   });
 });
 

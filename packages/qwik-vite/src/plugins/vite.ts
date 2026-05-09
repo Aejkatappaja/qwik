@@ -119,6 +119,7 @@ export function qwikVite(qwikViteOpts: QwikVitePluginOptions = {}): any {
   let viteAssetsDir: string | undefined;
   let srcDir: string | null = null;
   let rootDir: string | null = null;
+  let experimentalDefines: Record<string, string> | null = null;
 
   let ssrOutDir: string | null = null;
   let buildMode: QwikBuildMode = 'development';
@@ -241,6 +242,8 @@ export function qwikVite(qwikViteOpts: QwikVitePluginOptions = {}): any {
 
       const opts = await qwikPlugin.normalizeOptions(pluginOpts);
       input ||= opts.input;
+      experimentalDefines =
+        target === 'lib' ? null : getExperimentalFeatureDefines(opts.experimental);
 
       // Cache pluginOpts for use in configResolved()
       cachedPluginOpts = pluginOpts;
@@ -329,7 +332,7 @@ export function qwikVite(qwikViteOpts: QwikVitePluginOptions = {}): any {
           // The optimizer replaces __EXPERIMENTAL__.x while transforming source files.
           // Library-built Qwik dist keeps those checks unbaked, so app bundling needs
           // the same defines for prebuilt core modules that Vite includes directly.
-          ...(target === 'lib' ? {} : getExperimentalFeatureDefines(opts.experimental)),
+          ...(experimentalDefines ?? {}),
         },
       };
 
@@ -398,11 +401,15 @@ export function qwikVite(qwikViteOpts: QwikVitePluginOptions = {}): any {
     },
 
     configEnvironment(name: string, _config: EnvironmentOptions, _env: ConfigEnv) {
+      const experimentalDefineConfig = experimentalDefines
+        ? ({ define: experimentalDefines } satisfies Pick<EnvironmentOptions, 'define'>)
+        : {};
       // Use environment name to distinguish server vs client — config.consumer is not yet set
       // at the time this hook is called.
       const isServer = name === 'ssr';
       if (isServer) {
         return {
+          ...experimentalDefineConfig,
           resolve: {
             noExternal: [QWIK_CORE_ID, QWIK_CORE_INTERNAL_ID, QWIK_CORE_SERVER, QWIK_BUILD_ID],
           },
@@ -412,12 +419,13 @@ export function qwikVite(qwikViteOpts: QwikVitePluginOptions = {}): any {
       // adapter-provided conditions (e.g. ['webworker', 'worker'] for edge adapters).
       if (buildMode === 'production') {
         return {
+          ...experimentalDefineConfig,
           resolve: {
             conditions: ['min'],
           },
         } satisfies EnvironmentOptions;
       }
-      return {};
+      return experimentalDefineConfig satisfies EnvironmentOptions;
     },
 
     async configResolved(config) {
