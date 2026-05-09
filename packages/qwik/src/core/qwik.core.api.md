@@ -151,6 +151,8 @@ export interface _Container {
     // (undocumented)
     readonly $instanceHash$: string | null;
     // (undocumented)
+    $isOutOfOrderSegment$: boolean;
+    // (undocumented)
     readonly $locale$: string;
     // (undocumented)
     $pendingCount$: number;
@@ -158,6 +160,8 @@ export interface _Container {
     $renderPromise$: Promise<void> | null;
     // (undocumented)
     $resolveRenderPromise$: (() => void) | null;
+    // (undocumented)
+    $rootContainer$: _Container | null;
     // (undocumented)
     readonly $serverData$: Record<string, any>;
     // Warning: (ae-forgotten-export) The symbol "ObjToProxyMap" needs to be exported by the entry point index.d.ts
@@ -1101,6 +1105,8 @@ export abstract class _SharedContainer implements _Container {
     // (undocumented)
     $instanceHash$: string | null;
     // (undocumented)
+    $isOutOfOrderSegment$: boolean;
+    // (undocumented)
     readonly $locale$: string;
     // (undocumented)
     $pendingCount$: number;
@@ -1108,6 +1114,8 @@ export abstract class _SharedContainer implements _Container {
     $renderPromise$: Promise<void> | null;
     // (undocumented)
     $resolveRenderPromise$: (() => void) | null;
+    // (undocumented)
+    $rootContainer$: _Container | null;
     // (undocumented)
     $serverData$: Record<string, any>;
     // (undocumented)

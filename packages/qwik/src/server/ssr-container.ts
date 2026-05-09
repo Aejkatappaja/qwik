@@ -394,7 +394,10 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
   $runQueuedRender$<T>(render: () => ValueOrPromise<T>): Promise<T> {
     const run = () =>
       Promise.resolve(
-        __EXPERIMENTAL__.suspense && this.rootContainerDataStarted && !this.rootContainerReady
+        __EXPERIMENTAL__.suspense &&
+          this.outOfOrderStreaming &&
+          this.rootContainerDataStarted &&
+          !this.rootContainerReady
           ? this.waitForRootContainerReady()
           : undefined
       ).then(render);
@@ -404,7 +407,7 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
   }
 
   $runQueuedRenderBeforeRootState$<T>(render: () => ValueOrPromise<T>): Promise<T> {
-    if (!__EXPERIMENTAL__.suspense || this.rootContainerDataStarted) {
+    if (!__EXPERIMENTAL__.suspense || !this.outOfOrderStreaming || this.rootContainerDataStarted) {
       return this.$runQueuedRender$(render);
     }
     return new Promise<T>((resolve, reject) => {
@@ -413,7 +416,7 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
   }
 
   private waitForRootContainerReady(): ValueOrPromise<void> {
-    if (!__EXPERIMENTAL__.suspense || this.rootContainerReady) {
+    if (!__EXPERIMENTAL__.suspense || !this.outOfOrderStreaming || this.rootContainerReady) {
       return;
     }
     return (this.rootContainerReadyPromise ||= new Promise<void>((resolve) => {
@@ -422,7 +425,7 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
   }
 
   private markRootContainerReady(): void {
-    if (!__EXPERIMENTAL__.suspense || this.rootContainerReady) {
+    if (!__EXPERIMENTAL__.suspense || !this.outOfOrderStreaming || this.rootContainerReady) {
       return;
     }
     this.rootContainerSerializedRootCount = this.serializationCtx.$roots$.length;
@@ -433,7 +436,7 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
   }
 
   private async flushOutOfOrderRendersBeforeRootState(): Promise<void> {
-    if (!__EXPERIMENTAL__.suspense || this.rootContainerDataStarted) {
+    if (!__EXPERIMENTAL__.suspense || !this.outOfOrderStreaming || this.rootContainerDataStarted) {
       return;
     }
     await this.streamHandler.flush();
@@ -450,7 +453,7 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
   }
 
   nextOutOfOrderId(): number {
-    if (!__EXPERIMENTAL__.suspense) {
+    if (!__EXPERIMENTAL__.suspense || !this.outOfOrderStreaming) {
       return 0;
     }
     this.outOfOrderUsed = true;
@@ -458,7 +461,7 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
   }
 
   emitOutOfOrderSegmentScripts(scripts: string): void {
-    if (!__EXPERIMENTAL__.suspense || !scripts) {
+    if (!__EXPERIMENTAL__.suspense || !this.outOfOrderStreaming || !scripts) {
       return;
     }
     if (!this.rootContainerReady) {
@@ -471,7 +474,11 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
   }
 
   private emitQueuedOutOfOrderSegmentScripts(): void {
-    if (!__EXPERIMENTAL__.suspense || !this.outOfOrderSegmentScripts.length) {
+    if (
+      !__EXPERIMENTAL__.suspense ||
+      !this.outOfOrderStreaming ||
+      !this.outOfOrderSegmentScripts.length
+    ) {
       return;
     }
     const scripts = this.outOfOrderSegmentScripts;
@@ -493,6 +500,11 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
     if (!__EXPERIMENTAL__.suspense) {
       throw new Error(
         'Out-of-order Suspense streaming requires `experimental: ["suspense"]` in the `qwikVite` plugin.'
+      );
+    }
+    if (!this.outOfOrderStreaming) {
+      throw new Error(
+        'Out-of-order Suspense streaming requires `streaming.outOfOrder.strategy` to be `"suspense"`.'
       );
     }
     const writer = new StringBufferSegmentWriter();
@@ -704,7 +716,7 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
   }
 
   private collectSubscriptionPatches(rootLimit: number) {
-    if (!__EXPERIMENTAL__.suspense) {
+    if (!__EXPERIMENTAL__.suspense || !this.outOfOrderStreaming) {
       return;
     }
     return collectSubscriptionPatches(
@@ -715,7 +727,7 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
   }
 
   queueOutOfOrderSegment(segment: Promise<void>): void {
-    if (!__EXPERIMENTAL__.suspense) {
+    if (!__EXPERIMENTAL__.suspense || !this.outOfOrderStreaming) {
       return;
     }
     this.outOfOrderPendingSegments.push(segment);
@@ -883,14 +895,14 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
       this.onRenderDone();
       const snapshotTimer = createTimer();
       const beforeContainerData =
-        __EXPERIMENTAL__.suspense && this.outOfOrderUsed
+        __EXPERIMENTAL__.suspense && this.outOfOrderStreaming && this.outOfOrderUsed
           ? this.flushOutOfOrderRendersBeforeRootState()
           : undefined;
       return maybeThen(
         maybeThen(
           maybeThen(beforeContainerData, () => this.emitContainerData()),
           async () => {
-            if (__EXPERIMENTAL__.suspense && this.outOfOrderUsed) {
+            if (__EXPERIMENTAL__.suspense && this.outOfOrderStreaming && this.outOfOrderUsed) {
               this.emitQueuedOutOfOrderSegmentScripts();
               await this.streamHandler.flush();
               this.markRootContainerReady();
@@ -1193,7 +1205,7 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
       return;
     }
     const attrs: Props = { type: 'qwik/vnode' };
-    if (__EXPERIMENTAL__.suspense && segmentId) {
+    if (__EXPERIMENTAL__.suspense && this.outOfOrderStreaming && segmentId) {
       attrs[QSuspenseResolved] = segmentId;
     }
     this.openScript(attrs);
@@ -1467,7 +1479,12 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
   }
 
   emitOutOfOrderExecutorIfNeeded(): void {
-    if (!__EXPERIMENTAL__.suspense || !this.outOfOrderUsed || this.outOfOrderExecutorEmitted) {
+    if (
+      !__EXPERIMENTAL__.suspense ||
+      !this.outOfOrderStreaming ||
+      !this.outOfOrderUsed ||
+      this.outOfOrderExecutorEmitted
+    ) {
       return;
     }
     this.outOfOrderExecutorEmitted = true;
@@ -1511,7 +1528,7 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
 
   isStatic(): boolean {
     return (
-      !(__EXPERIMENTAL__.suspense && this.outOfOrderUsed) &&
+      !(__EXPERIMENTAL__.suspense && this.outOfOrderStreaming && this.outOfOrderUsed) &&
       this.serializationCtx.$eventQrls$.size === 0
     );
   }

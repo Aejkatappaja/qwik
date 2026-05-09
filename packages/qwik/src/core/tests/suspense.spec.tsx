@@ -1003,6 +1003,41 @@ describe('domRender: Reveal suspense coordination', () => {
 });
 
 describe('renderToStream: out-of-order Suspense', () => {
+  it('should not use out-of-order streaming when suspense strategy is disabled', async () => {
+    let resolveSlow!: (value: JSXOutput) => void;
+    const slow = new Promise<JSXOutput>((resolve) => {
+      resolveSlow = resolve;
+    });
+    const Slow = component$(() => <>{slow}</>);
+    const chunks: string[] = [];
+
+    const renderPromise = renderToStream(
+      <main>
+        <Suspense fallback={<button>Waiting</button>}>
+          <Slow />
+        </Suspense>
+      </main>,
+      {
+        containerTagName: 'div',
+        qwikLoader: 'never',
+        stream: collectStream(chunks),
+        streaming: {
+          inOrder: { strategy: 'disabled' },
+          outOfOrder: { strategy: 'disabled' },
+        },
+      }
+    );
+
+    resolveSlow(<section>Done</section>);
+    await renderPromise;
+
+    const html = chunks.join('');
+    expect(html).toContain('Done');
+    expect(html).not.toContain('q:rp=');
+    expect(html).not.toContain('q:r=');
+    expect(html).not.toContain('qO(');
+  });
+
   it('should stream fallback and shell before slow content resolves', async () => {
     let resolveSlow!: (value: JSXOutput) => void;
     const slow = new Promise<JSXOutput>((resolve) => {

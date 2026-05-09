@@ -11,6 +11,7 @@ import {
   type RevealRegistrationLike,
 } from '../shared/utils/reveal';
 import { tryGetInvokeContext } from '../use/use-core';
+import type { SSRContainer } from '../ssr/ssr-types';
 
 /** @internal */
 export const SUSPENSE_QRL_SYMBOL = '_suC';
@@ -60,7 +61,7 @@ export const createOutOfOrderRevealCoordinator = <ITEM extends RevealItemLike = 
   order: RevealOrder,
   collapsed: boolean
 ): OutOfOrderRevealCoordinator<ITEM> => {
-  if (!__EXPERIMENTAL__.suspense) {
+  if (!isOutOfOrderStreaming()) {
     return null!;
   }
   const container = tryGetInvokeContext()?.$container$;
@@ -101,9 +102,10 @@ export const nextOutOfOrderSuspenseId = (): number => {
   if (!__EXPERIMENTAL__.suspense) {
     return 0;
   }
-  const container = tryGetInvokeContext()?.$container$ as
-    | { nextOutOfOrderId?: () => number }
-    | undefined;
+  const container = tryGetInvokeContext()?.$container$ as SSRContainer | undefined;
+  if (container?.outOfOrderStreaming !== true) {
+    return 0;
+  }
   return container?.nextOutOfOrderId?.() ?? 0;
 };
 
