@@ -537,6 +537,7 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
 
     const innerSegmentContainer = segmentContainer as typeof segmentContainer & InnerContainer;
     innerSegmentContainer.$rootContainer$ = this;
+    innerSegmentContainer.$isOutOfOrderSegment$ = true;
     innerSegmentContainer.$storeProxyMap$ = this.$storeProxyMap$;
     segmentContainer.serializationCtx = segmentContainer.serializationCtxFactory(
       SsrNode,

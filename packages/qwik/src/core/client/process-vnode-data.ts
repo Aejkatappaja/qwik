@@ -67,8 +67,7 @@ export function processVNodeData(document: Document) {
   const Q_SUSPENSE_RESOLVED = 'q:r';
   const Q_SUSPENSE_RESULT_PARENT = 'q:rp';
   const qDocument = document as QDocument;
-  const vNodeDataMap =
-    qDocument.qVNodeData || (qDocument.qVNodeData = new WeakMap<Element, string>());
+  const vNodeDataMap = (qDocument.qVNodeData ||= new WeakMap<Element, string>());
   const prototype: any = document.body;
   const getter = (prototype: any, name: string) => {
     let getter: any;
@@ -91,14 +90,15 @@ export function processVNodeData(document: Document) {
     const scripts = element.querySelectorAll('script[type="qwik/vnode"]');
     for (let i = 0; i < scripts.length; i++) {
       const script = scripts[i];
-      const qContainerElement = script.closest('[q\\:container]') as ContainerElement | null;
+      const qContainer = script.closest('[q\\:container]') as ContainerElement;
+      qContainer.qVNodeRefs ||= new Map<number, Element | ElementVNode>();
+
+      const scriptContent = script.textContent!;
       const segment = __EXPERIMENTAL__.suspense && script.getAttribute(Q_SUSPENSE_RESOLVED);
       if (segment) {
-        (qContainerElement!.qSegmentVnodeData ||= new Map()).set(segment, script.textContent!);
-        qContainerElement!.qVNodeRefs ||= new Map<number, Element | ElementVNode>();
+        (qContainer.qSegmentVnodeData ||= new Map()).set(segment, scriptContent);
       } else {
-        qContainerElement!.qVnodeData = script.textContent!;
-        qContainerElement!.qVNodeRefs ||= new Map<number, Element | ElementVNode>();
+        qContainer.qVnodeData = scriptContent;
       }
     }
     const shadowRoots = element.querySelectorAll('[q\\:shadowroot]');
@@ -115,18 +115,18 @@ export function processVNodeData(document: Document) {
   ///////////////////////////////
 
   const enum NodeType {
-    CONTAINER_MASK /* ***************** */ = 0b000000001,
-    ELEMENT /* ************************ */ = 0b000000010, // regular element
-    ELEMENT_CONTAINER /* ************** */ = 0b000000011, // container element need to descend into it
-    ELEMENT_SHADOW_ROOT_WRAPPER /* **** */ = 0b000000110, // shadow root wrapper element with q:shadowroot attribute
-    ELEMENT_SUSPENSE_RESULT_PARENT /* * */ = 0b100000010,
-    COMMENT_SKIP_START /* ************* */ = 0b000001001, // Comment but skip the content until COMMENT_SKIP_END
-    COMMENT_SKIP_END /* *************** */ = 0b000001000, // Comment end
-    COMMENT_IGNORE_START /* *********** */ = 0b000010000, // Comment ignore, descend into children and skip the content until COMMENT_ISLAND_START
-    COMMENT_IGNORE_END /* ************* */ = 0b000100000, // Comment ignore end
-    COMMENT_ISLAND_START /* *********** */ = 0b001000001, // Comment island, count elements for parent container until COMMENT_ISLAND_END
-    COMMENT_ISLAND_END /* ************* */ = 0b001000000, // Comment island end
-    OTHER /* ************************** */ = 0b000000000,
+    CONTAINER_MASK /* ***************** */ = 0b00000001,
+    ELEMENT /* ************************ */ = 0b00000010, // regular element
+    ELEMENT_CONTAINER /* ************** */ = 0b00000011, // container element need to descend into it
+    ELEMENT_SHADOW_ROOT_WRAPPER /* **** */ = 0b00000110, // shadow root wrapper element with q:shadowroot attribute
+    ELEMENT_SUSPENSE_RESULT_PARENT /* * */ = 0b10000010,
+    COMMENT_SKIP_START /* ************* */ = 0b00001001, // Comment but skip the content until COMMENT_SKIP_END
+    COMMENT_SKIP_END /* *************** */ = 0b00001000, // Comment end
+    COMMENT_IGNORE_START /* *********** */ = 0b00010000, // Comment ignore, descend into children and skip the content until COMMENT_ISLAND_START
+    COMMENT_IGNORE_END /* ************* */ = 0b00100000, // Comment ignore end
+    COMMENT_ISLAND_START /* *********** */ = 0b01000001, // Comment island, count elements for parent container until COMMENT_ISLAND_END
+    COMMENT_ISLAND_END /* ************* */ = 0b01000000, // Comment island end
+    OTHER /* ************************** */ = 0b00000000,
   }
 
   /**
@@ -137,27 +137,22 @@ export function processVNodeData(document: Document) {
   const getFastNodeType = (node: Node): NodeType => {
     const nodeType = getNodeType.call(node);
     if (nodeType === 1 /* Node.ELEMENT_NODE */) {
-      const qContainer = getAttribute.call(node, Q_CONTAINER);
-      if (qContainer === null) {
-        if (__EXPERIMENTAL__.suspense && getAttribute.call(node, Q_SUSPENSE_RESOLVED) !== null) {
-          const localName = (node as Element).localName;
-          if (localName === 'template' || localName === 'script') {
-            return NodeType.OTHER;
-          }
-        }
-        if (hasAttribute.call(node, Q_SHADOW_ROOT)) {
-          return NodeType.ELEMENT_SHADOW_ROOT_WRAPPER;
-        }
-        if (
-          __EXPERIMENTAL__.suspense &&
-          getAttribute.call(node, Q_SUSPENSE_RESULT_PARENT) !== null
-        ) {
-          return NodeType.ELEMENT_SUSPENSE_RESULT_PARENT;
-        }
-        return hasAttribute.call(node, Q_PROPS_SEPARATOR) ? NodeType.ELEMENT : NodeType.OTHER;
-      } else {
+      if (getAttribute.call(node, Q_CONTAINER) !== null) {
         return NodeType.ELEMENT_CONTAINER;
       }
+      if (__EXPERIMENTAL__.suspense && getAttribute.call(node, Q_SUSPENSE_RESOLVED) !== null) {
+        const localName = (node as Element).localName;
+        if (localName === 'template' || localName === 'script') {
+          return NodeType.OTHER;
+        }
+      }
+      if (hasAttribute.call(node, Q_SHADOW_ROOT)) {
+        return NodeType.ELEMENT_SHADOW_ROOT_WRAPPER;
+      }
+      if (__EXPERIMENTAL__.suspense && getAttribute.call(node, Q_SUSPENSE_RESULT_PARENT) !== null) {
+        return NodeType.ELEMENT_SUSPENSE_RESULT_PARENT;
+      }
+      return hasAttribute.call(node, Q_PROPS_SEPARATOR) ? NodeType.ELEMENT : NodeType.OTHER;
     } else if (nodeType === 8 /* Node.COMMENT_NODE */) {
       const nodeValue = node.nodeValue || ''; // nodeValue is monomorphic so it does not need fast path
       if (nodeValue.startsWith(Q_CONTAINER_ISLAND)) {
@@ -198,10 +193,8 @@ export function processVNodeData(document: Document) {
     exitNode: Node | null,
     vData: string,
     qVNodeRefs: Map<number, Element | ElementVNode>,
-    prefix: string,
     qContainerElement: ContainerElement | null,
-    segmentId?: string,
-    vNodeIndexOffset = 0
+    segmentId?: string
   ) => {
     const vData_length = vData.length;
     /// Stores the current element index as the TreeWalker traverses the DOM.
@@ -219,7 +212,6 @@ export function processVNodeData(document: Document) {
       let elementsToSkip = 0;
       while (isSeparator((ch = vData.charCodeAt(vData_start)))) {
         // Keep consuming the separators and incrementing the vNodeIndex
-        // console.log('ADVANCE', vNodeElementIndex, ch, ch - 33);
         elementsToSkip += 1 << (ch - VNodeDataSeparator.ADVANCE_1);
         vData_start++;
         if (vData_start >= vData_length) {
@@ -243,7 +235,6 @@ export function processVNodeData(document: Document) {
         while (cursor && !(nextNode = nextSibling(cursor))) {
           cursor = cursor!.parentNode;
         }
-        // console.log('EXIT', nextNode?.outerHTML);
         walkContainer(
           walker,
           container,
@@ -251,7 +242,6 @@ export function processVNodeData(document: Document) {
           nextNode,
           container.qVnodeData || '',
           container.qVNodeRefs!,
-          prefix + '  ',
           container
         );
       } else if (nodeType === NodeType.COMMENT_IGNORE_START) {
@@ -262,7 +252,6 @@ export function processVNodeData(document: Document) {
             throw new Error(`Island inside <!--${node?.nodeValue}--> not found!`);
           }
         } while (getFastNodeType(islandNode) !== NodeType.COMMENT_ISLAND_START);
-        nextNode = null;
       } else if (nodeType === NodeType.COMMENT_ISLAND_END) {
         // Walk forward to find either the next container-island or the end of the q:ignore block.
         // This handles multiple islands within a single q:ignore block.
@@ -288,8 +277,7 @@ export function processVNodeData(document: Document) {
             throw new Error(`<!--${node?.nodeValue}--> not closed!`);
           }
         } while (getFastNodeType(nextNode) !== NodeType.COMMENT_SKIP_END);
-        // console.log('EXIT', nextNode?.outerHTML);
-        walkContainer(walker, node, node, nextNode, '', null!, prefix + '  ', qContainerElement);
+        walkContainer(walker, node, node, nextNode, '', null!, qContainerElement);
       } else if (nodeType === NodeType.ELEMENT_SHADOW_ROOT_WRAPPER) {
         // If we are in a shadow root, we need to get the shadow root element.
         nextNode = nextSibling(node);
@@ -307,7 +295,6 @@ export function processVNodeData(document: Document) {
             null,
             '',
             null!,
-            prefix + '  ',
             null
           );
         }
@@ -326,8 +313,7 @@ export function processVNodeData(document: Document) {
           vData_start = vData_end;
           if (vData_start < vData_length) {
             vNodeElementIndex += howManyElementsToSkip();
-            const shouldStoreRef = ch === VNodeDataSeparator.REFERENCE;
-            if (shouldStoreRef) {
+            if (ch === VNodeDataSeparator.REFERENCE) {
               // if we need to store the ref handle it here.
               needsToStoreRef = vNodeElementIndex;
               vData_start++;
@@ -343,44 +329,26 @@ export function processVNodeData(document: Document) {
             vNodeElementIndex = Number.MAX_SAFE_INTEGER;
           }
         }
-        // console.log(
-        //   prefix,
-        //   'ELEMENT',
-        //   nodeType,
-        //   elementIdx,
-        //   vNodeElementIndex,
-        //   (node as any).outerHTML,
-        //   elementIdx === vNodeElementIndex ? vData.substring(vData_start, vData_end) : ''
-        // );
-        const isRootSuspenseResultParent =
+        const contentBoundaryId =
           __EXPERIMENTAL__.suspense &&
           !segmentId &&
-          nodeType === NodeType.ELEMENT_SUSPENSE_RESULT_PARENT;
-        const contentBoundaryId = isRootSuspenseResultParent
-          ? getAttribute.call(node!, Q_SUSPENSE_RESULT_PARENT)!
-          : null;
+          nodeType === NodeType.ELEMENT_SUSPENSE_RESULT_PARENT
+            ? getAttribute.call(node!, Q_SUSPENSE_RESULT_PARENT)!
+            : null;
         if (elementIdx === vNodeElementIndex) {
-          if (!isRootSuspenseResultParent) {
+          if (contentBoundaryId === null) {
             if (needsToStoreRef === elementIdx) {
               qVNodeRefs.set(
-                segmentId
-                  ? getSegmentVNodeId(segmentId, elementIdx)
-                  : vNodeIndexOffset + elementIdx,
+                segmentId ? getSegmentVNodeId(segmentId, elementIdx) : elementIdx,
                 node as Element
               );
             }
-            const instructions = vData.substring(vData_start, vData_end);
-            vNodeDataMap.set(node as Element, instructions);
+            vNodeDataMap.set(node as Element, vData.substring(vData_start, vData_end));
           }
         }
         elementIdx++;
         if (__EXPERIMENTAL__.suspense && contentBoundaryId !== null) {
-          processSuspenseContentSegment!(
-            qContainerElement,
-            node!,
-            contentBoundaryId,
-            prefix + '  '
-          );
+          processSuspenseContentSegment!(qContainerElement, node as Element, contentBoundaryId);
           nextNode = nextSibling(node);
           if (nextNode) {
             walker.currentNode = nextNode;
@@ -391,24 +359,17 @@ export function processVNodeData(document: Document) {
   };
 
   const processSuspenseContentSegment = __EXPERIMENTAL__.suspense
-    ? (
-        qContainerElement: ContainerElement | null,
-        contentNode: Node | null,
-        boundaryId: string,
-        prefix: string
-      ) => {
+    ? (qContainerElement: ContainerElement | null, contentNode: Element, boundaryId: string) => {
         const segmentData = qContainerElement?.qSegmentVnodeData;
         const qVNodeRefs = qContainerElement?.qVNodeRefs;
-        if (!segmentData || !qVNodeRefs || !contentNode) {
+        if (!segmentData || !qVNodeRefs) {
           return;
         }
         const vData = segmentData.get(boundaryId);
         if (!vData) {
           return;
         }
-        if (contentNode.nodeType === 1 /* Node.ELEMENT_NODE */) {
-          qVNodeRefs.set(getSegmentVNodeId(boundaryId, 0), contentNode as QElement);
-        }
+        qVNodeRefs.set(getSegmentVNodeId(boundaryId, 0), contentNode as QElement);
         const segmentWalker = document.createTreeWalker(
           document,
           0x1 /* NodeFilter.SHOW_ELEMENT  */ | 0x80 /*  NodeFilter.SHOW_COMMENT */
@@ -421,7 +382,6 @@ export function processVNodeData(document: Document) {
           nextSibling(contentNode),
           vData,
           qVNodeRefs,
-          prefix + boundaryId + '  ',
           qContainerElement,
           boundaryId
         );
@@ -434,7 +394,7 @@ export function processVNodeData(document: Document) {
     0x1 /* NodeFilter.SHOW_ELEMENT  */ | 0x80 /*  NodeFilter.SHOW_COMMENT */
   );
 
-  walkContainer(walker, null, walker.firstChild(), null, '', null!, '', null);
+  walkContainer(walker, null, walker.firstChild(), null, '', null!, null);
 }
 
 const isSeparator = (ch: number) =>

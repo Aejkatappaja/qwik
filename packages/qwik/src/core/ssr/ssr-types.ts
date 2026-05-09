@@ -68,19 +68,9 @@ export interface ISsrComponentFrame {
 
 export type SymbolToChunkResolver = (symbol: string) => string;
 
-/** @internal */
-export type SSRSlotReplayRecords = Map<ISsrComponentFrame, Map<string, JSXChildren | null>>;
-
-/** @internal */
-export interface SSRSlotReplay {
-  mode: 'record' | 'replay';
-  records: SSRSlotReplayRecords;
-}
-
 export interface SSRRenderJSXOptions {
   currentStyleScoped: string | null;
   parentComponentFrame: ISsrComponentFrame | null;
-  slotReplay?: SSRSlotReplay;
 }
 
 export interface SSROutOfOrderSegment {

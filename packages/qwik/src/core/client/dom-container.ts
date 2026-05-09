@@ -5,8 +5,6 @@ import type { QRLInternal } from '../../server/qwik-types';
 import { assertTrue } from '../shared/error/assert';
 import { QError, qError } from '../shared/error/error';
 import { ERROR_CONTEXT, isRecoverable } from '../shared/error/error-handling';
-import { applySubscriptionPatches } from '../control-flow/suspense-utils';
-import type { SubscriptionPatch } from '../shared/serdes/subscription-patch';
 import type { QRL } from '../shared/qrl/qrl.public';
 import { wrapDeserializerProxy } from '../shared/serdes/deser-proxy';
 import { getObjectById, parseQRL, preprocessState } from '../shared/serdes/index';
@@ -49,6 +47,7 @@ import { markVNodeDirty } from '../shared/vnode/vnode-dirty';
 import type { VirtualVNode } from '../shared/vnode/virtual-vnode';
 import type { VNode } from '../shared/vnode/vnode';
 import type { ContextId } from '../use/use-context';
+import { processSegmentStateScripts } from './process-segment-state';
 import { processVNodeData } from './process-vnode-data';
 import {
   VNodeFlags,
@@ -104,7 +103,6 @@ export class DomContainer extends _SharedContainer implements IClientContainer {
   private $rawStateData$: unknown[];
   private $stateData$: unknown[];
   private $rootForwardRefs$: Array<number | string> | null = null;
-  private $processedStatePatchScripts$: WeakSet<Element> = new WeakSet();
   private $styleIds$: Set<string> | null = null;
 
   constructor(element: ContainerElement) {
@@ -195,69 +193,7 @@ export class DomContainer extends _SharedContainer implements IClientContainer {
     if (!__EXPERIMENTAL__.suspense) {
       return;
     }
-    const qwikStates = this.element.querySelectorAll(
-      `${this.$stateScriptSelector$()}${QStatePatchAttrSelector}`
-    );
-    for (let i = 0; i < qwikStates.length; i++) {
-      const stateScript = qwikStates[i];
-      if (this.$processedStatePatchScripts$.has(stateScript)) {
-        continue;
-      }
-      this.$processedStatePatchScripts$.add(stateScript);
-      this.$processStatePatch$(stateScript.textContent);
-    }
-  }
-
-  private $processStatePatch$(textContent: string | null): void {
-    if (!__EXPERIMENTAL__.suspense) {
-      return;
-    }
-    if (textContent) {
-      const [rootStart, rawStateData, forwardRefs, subscriptionPatchRootId] = JSON.parse(
-        textContent
-      ) as [number, unknown[], Array<number | string> | 0 | undefined, number | string | undefined];
-      this.$appendStatePatchRoots$(rootStart, rawStateData);
-      this.$mergeForwardRefs$(forwardRefs || undefined);
-      applySubscriptionPatches(
-        this,
-        subscriptionPatchRootId === undefined
-          ? undefined
-          : (this.$getObjectById$(subscriptionPatchRootId) as SubscriptionPatch[])
-      );
-    }
-  }
-
-  private $appendStatePatchRoots$(rootStart: number, rawStateData: unknown[]): void {
-    const currentRootCount = this.$rawStateData$.length / 2;
-    if (rootStart !== currentRootCount) {
-      if (qDev) {
-        throw new Error(
-          `Invalid Qwik state patch root start: expected ${currentRootCount}, received ${rootStart}.`
-        );
-      }
-      return;
-    }
-    for (let i = 0; i < rawStateData.length; i++) {
-      this.$rawStateData$[rootStart * 2 + i] = rawStateData[i];
-    }
-    preprocessState(this.$rawStateData$, this, undefined, rootStart * 2);
-    this.$stateData$ = wrapDeserializerProxy(this, this.$rawStateData$) as unknown[];
-    this.$stateData$.length = this.$rawStateData$.length / 2;
-    this.$rootForwardRefs$ = this.$forwardRefs$;
-  }
-
-  private $mergeForwardRefs$(forwardRefs: Array<number | string> | undefined): void {
-    if (!forwardRefs) {
-      return;
-    }
-    const rootForwardRefs = (this.$rootForwardRefs$ ||= []);
-    for (let i = 0; i < forwardRefs.length; i++) {
-      const ref = forwardRefs[i];
-      if (ref !== -1 && ref !== undefined) {
-        rootForwardRefs[i] = ref;
-      }
-    }
-    this.$forwardRefs$ = rootForwardRefs;
+    processSegmentStateScripts(this);
   }
 
   /**
@@ -282,16 +218,8 @@ export class DomContainer extends _SharedContainer implements IClientContainer {
     }
   }
 
-  $setRawState$(id: number | string, vParent: VNode, _segmentId?: string | null): void {
-    let stateId: number;
-
-    if (typeof id === 'string') {
-      stateId = Number(id);
-    } else {
-      stateId = id;
-    }
-
-    this.$stateData$[stateId] = vParent;
+  $setRawState$(id: number, vParent: VNode): void {
+    this.$stateData$[id] = vParent;
   }
 
   parseQRL<T = unknown>(qrlStr: string): QRL<T> {
@@ -408,8 +336,8 @@ export class DomContainer extends _SharedContainer implements IClientContainer {
     return getObjectById(id, this.$stateData$);
   };
 
-  $getForwardRef$(id: number | string): number | string | undefined {
-    return this.$rootForwardRefs$?.[Number(id)];
+  $getForwardRef$(id: number): number | string | undefined {
+    return this.$rootForwardRefs$?.[id];
   }
 
   getSyncFn(id: number): (...args: unknown[]) => unknown {

@@ -6,7 +6,7 @@ import type { VNode } from './vnode/vnode';
 
 export interface DeserializeContainer {
   $getObjectById$: (id: number | string) => unknown;
-  $getForwardRef$: (id: number | string) => number | string | undefined;
+  $getForwardRef$: (id: number) => number | string | undefined;
   element: HTMLElement | null;
   getSyncFn: (id: number) => (...args: unknown[]) => unknown;
   $state$?: unknown[];
@@ -18,6 +18,8 @@ export interface DeserializeContainer {
 export interface Container {
   readonly $version$: string;
   readonly $storeProxyMap$: ObjToProxyMap;
+  $rootContainer$: Container | null;
+  $isOutOfOrderSegment$: boolean;
   /// Current language locale
   readonly $locale$: string;
   /// Retrieve Object from paused serialized state.

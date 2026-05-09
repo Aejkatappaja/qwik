@@ -1790,7 +1790,7 @@ const materializeFromDOM = (
           container = getDomContainer(vParent.node);
         }
         const id = consumeValue();
-        container.$setRawState$(id, vParent, segmentId);
+        container.$setRawState$(parseInt(id, 10), vParent);
         isDev && vnode_setProp(vParent, ELEMENT_ID, id);
       } else if (peek() === VNodeDataChar.BACK_REFS) {
         if (!container) {
@@ -2152,7 +2152,7 @@ function materializeFromVNodeData(
         container = getDomContainer(element);
       }
       const id = consumeValue();
-      container.$setRawState$(id, vParent, segmentId);
+      container.$setRawState$(parseInt(id, 10), vParent);
       isDev && vnode_setProp(vParent, ELEMENT_ID, id);
     } else if (peek() === VNodeDataChar.PROPS) {
       vnode_setProp(vParent, ELEMENT_PROPS, consumeValue());

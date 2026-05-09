@@ -4,12 +4,12 @@ import { assertTrue } from '../../shared/error/assert';
 import { tryGetInvokeContext } from '../../use/use-core';
 import { isObject, isSerializableObject } from '../../shared/utils/types';
 import type { Container } from '../../shared/types';
-import type { SerializationContext } from '../../shared/serdes';
 import { isSameContainer } from '../../shared/utils/container';
 import {
   addQrlToSerializationCtx,
   ensureContainsBackRef,
   ensureContainsSubscription,
+  getEffectSerializationContainer,
   scheduleEffects,
 } from '../utils';
 import {
@@ -23,6 +23,7 @@ import {
 import type { PropsProxy, PropsProxyHandler } from '../../shared/jsx/props-proxy';
 import { isDev, isServer } from '@qwik.dev/core/build';
 import { isServerPlatform } from '../../shared/platform/platform';
+import type { SSRContainer } from '../../ssr/ssr-types';
 
 const DEBUG = false;
 
@@ -279,19 +280,13 @@ export function addStoreEffect(
   // to unsubscribe from. So we need to store the reference from the effect back
   // to this signal.
   ensureContainsBackRef(effectSubscription, target);
-  const serializationContainer = renderContainer || store.$container$;
+  const serializationContainer = getEffectSerializationContainer(
+    renderContainer,
+    store.$container$
+  );
   if (shouldRecordExternalRootEffect) {
-    const recordExternalRootEffect = (
-      serializationContainer as (Container & { serializationCtx?: SerializationContext }) | null
-    )?.serializationCtx?.$recordExternalRootEffect$ as
-      | ((
-          producer: unknown,
-          effect: EffectSubscription,
-          prop: string | symbol | null,
-          sourceEffects?: Map<string | symbol, Set<EffectSubscription>>
-        ) => void)
-      | undefined;
-    recordExternalRootEffect?.(target, effectSubscription, prop, effectsMap);
+    const serializationCtx = (serializationContainer as SSRContainer | null)?.serializationCtx;
+    serializationCtx?.$recordExternalRootEffect$?.(target, effectSubscription, prop, effectsMap);
   }
   // TODO is this needed with the preloader?
   isOnServer && addQrlToSerializationCtx(effectSubscription, serializationContainer);

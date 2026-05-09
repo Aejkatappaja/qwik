@@ -43,12 +43,7 @@ import {
   isInternalServerComponent,
 } from './internal-server-component';
 import { applyInlineComponent, applyQwikComponentBody } from './ssr-render-component';
-import type {
-  ISsrComponentFrame,
-  SSRContainer,
-  SSRRenderJSXOptions,
-  SSRSlotReplayRecords,
-} from './ssr-types';
+import type { ISsrComponentFrame, SSRContainer, SSRRenderJSXOptions } from './ssr-types';
 import { resolveSlotName } from '../shared/utils/prop';
 
 class MaybeAsyncSignal {}
@@ -154,7 +149,6 @@ function processJSXNode(
           await _walkJSX(ssr, chunk as JSXOutput, {
             currentStyleScoped: options.currentStyleScoped,
             parentComponentFrame: options.parentComponentFrame,
-            slotReplay: options.slotReplay,
           });
           await ssr.streamHandler.flush();
         }
@@ -244,21 +238,10 @@ function processJSXNode(
             );
             enqueue(ssr.closeProjection);
             const slotDefaultChildren: JSXChildren | null = jsx.children || null;
-            const replay = __EXPERIMENTAL__.suspense ? options.slotReplay : undefined;
-            const frameSlots = replay?.records.get(componentFrame);
-            let slotChildren: JSXChildren | null;
-            if (replay?.mode === 'replay' && frameSlots?.has(slotName)) {
-              componentFrame.componentNode.setProp(slotName, node.id);
-              slotChildren = frameSlots.get(slotName)!;
-            } else {
-              slotChildren =
-                componentFrame.consumeChildrenForSlot(node, slotName) || slotDefaultChildren;
-              if (replay?.mode === 'record') {
-                recordSlotReplay(replay.records, componentFrame, slotName, slotChildren);
-              }
-              if (slotDefaultChildren && slotChildren !== slotDefaultChildren) {
-                ssr.addUnclaimedProjection(componentFrame, QDefaultSlot, slotDefaultChildren);
-              }
+            const slotChildren =
+              componentFrame.consumeChildrenForSlot(node, slotName) || slotDefaultChildren;
+            if (slotDefaultChildren && slotChildren !== slotDefaultChildren) {
+              ssr.addUnclaimedProjection(componentFrame, QDefaultSlot, slotDefaultChildren);
             }
             enqueue(slotChildren as JSXOutput);
             enqueue(
@@ -289,7 +272,6 @@ function processJSXNode(
                 await _walkJSX(ssr, chunk, {
                   currentStyleScoped: options.currentStyleScoped,
                   parentComponentFrame: options.parentComponentFrame,
-                  slotReplay: options.slotReplay,
                 });
                 await ssr.streamHandler.flush();
               },
@@ -360,19 +342,6 @@ function processJSXNode(
       }
     }
   }
-}
-
-function recordSlotReplay(
-  records: SSRSlotReplayRecords,
-  componentFrame: ISsrComponentFrame,
-  slotName: string,
-  slotChildren: JSXChildren | null
-): void {
-  let recordedSlots = records.get(componentFrame);
-  if (!recordedSlots) {
-    records.set(componentFrame, (recordedSlots = new Map()));
-  }
-  recordedSlots.set(slotName, slotChildren);
 }
 
 function maybeAddPollingAsyncSignalToEagerResume(

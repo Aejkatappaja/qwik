@@ -18,6 +18,8 @@ import type { Container, HostElement, ObjToProxyMap } from './types';
 export abstract class _SharedContainer implements Container {
   readonly $version$: string;
   readonly $storeProxyMap$: ObjToProxyMap;
+  $rootContainer$: Container | null = null;
+  $isOutOfOrderSegment$ = false;
   /// Current language locale
   readonly $locale$: string;
   /// Retrieve Object from paused serialized state.

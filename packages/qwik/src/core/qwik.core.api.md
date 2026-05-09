@@ -68,13 +68,13 @@ export interface ClientContainer extends _Container {
     // (undocumented)
     $forwardRefs$: Array<number | string> | null;
     // (undocumented)
-    $getForwardRef$(id: number | string): number | string | undefined;
+    $getForwardRef$(id: number): number | string | undefined;
     // (undocumented)
     $locale$: string;
     // (undocumented)
     $processSegmentStateScripts$(): void;
     // (undocumented)
-    $setRawState$(id: number | string, vParent: _ElementVNode | _VirtualVNode, segmentId?: string | null): void;
+    $setRawState$(id: number, vParent: _ElementVNode | _VirtualVNode): void;
     // (undocumented)
     document: _QDocument;
     // (undocumented)
@@ -315,7 +315,7 @@ class DomContainer extends _SharedContainer implements ClientContainer {
     // (undocumented)
     $forwardRefs$: Array<number | string> | null;
     // (undocumented)
-    $getForwardRef$(id: number | string): number | string | undefined;
+    $getForwardRef$(id: number): number | string | undefined;
     // (undocumented)
     $getObjectById$: (id: number | string) => unknown;
     $hoistStyles$(): void;
@@ -326,7 +326,7 @@ class DomContainer extends _SharedContainer implements ClientContainer {
     // (undocumented)
     $qFuncs$: Array<(...args: unknown[]) => unknown>;
     // (undocumented)
-    $setRawState$(id: number | string, vParent: _VNode, _segmentId?: string | null): void;
+    $setRawState$(id: number, vParent: _VNode): void;
     // (undocumented)
     $storeProxyMap$: ObjToProxyMap;
     constructor(element: _ContainerElement);

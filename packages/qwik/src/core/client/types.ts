@@ -21,13 +21,9 @@ export interface ClientContainer extends Container {
   $forwardRefs$: Array<number | string> | null;
   vNodeLocate(id: string | Element): VNode;
   parseQRL<T = unknown>(qrl: string): QRL<T>;
-  $getForwardRef$(id: number | string): number | string | undefined;
+  $getForwardRef$(id: number): number | string | undefined;
   $processSegmentStateScripts$(): void;
-  $setRawState$(
-    id: number | string,
-    vParent: ElementVNode | VirtualVNode,
-    segmentId?: string | null
-  ): void;
+  $setRawState$(id: number, vParent: ElementVNode | VirtualVNode): void;
 }
 
 /** @internal */

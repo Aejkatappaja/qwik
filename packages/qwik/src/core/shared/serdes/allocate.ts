@@ -38,7 +38,7 @@ export const allocate = (container: DeserializeContainer, typeId: number, value:
     case TypeIds.RootRef:
       return container.$getObjectById$(value as number);
     case TypeIds.ForwardRef:
-      const rootRef = container.$getForwardRef$(value as number | string);
+      const rootRef = container.$getForwardRef$(value as number);
       if (rootRef === -1 || rootRef === undefined) {
         return _UNINITIALIZED;
       } else {

@@ -21,7 +21,7 @@ import {
 } from '../shared/utils/markers';
 import { resolveSlotName } from '../shared/utils/prop';
 import { createInternalServerComponent } from '../ssr/internal-server-component';
-import type { SSRContainer, SSRRenderJSXOptions, SSRSlotReplayRecords } from '../ssr/ssr-types';
+import type { SSRContainer, SSRRenderJSXOptions } from '../ssr/ssr-types';
 import { useComputedQrl } from '../use/use-computed';
 import { useCursorBoundary, type CursorBoundary } from '../use/use-cursor-boundary';
 import { useSignal } from '../use/use-signal';
@@ -205,19 +205,10 @@ const SSRDeferredSlot = __EXPERIMENTAL__.suspense
         jsx.flags,
         jsx.key
       );
-      const slotReplayRecords = claimDeferredSlotProjection(ssr, slot, options);
       const content = ssr.segment(
         contentSegment,
-        slot,
-        slotReplayRecords
-          ? {
-              ...options,
-              slotReplay: {
-                mode: 'replay',
-                records: slotReplayRecords,
-              },
-            }
-          : options
+        createClaimedDeferredSlot(ssr, slot, options) || slot,
+        options
       );
 
       writeOutOfOrderPlaceholder(ssr, boundaryId);
@@ -230,11 +221,11 @@ const SSRDeferredSlot = __EXPERIMENTAL__.suspense
     })
   : null!;
 
-function claimDeferredSlotProjection(
+function createClaimedDeferredSlot(
   ssr: SSRContainer,
   slot: ReturnType<typeof _jsxSorted>,
   options: SSRRenderJSXOptions
-): SSRSlotReplayRecords | null {
+): ReturnType<typeof _jsxSorted> | null {
   const componentFrame = options.parentComponentFrame;
   if (!componentFrame) {
     return null;
@@ -248,9 +239,14 @@ function claimDeferredSlotProjection(
   if (slotDefaultChildren && slotChildren !== slotDefaultChildren) {
     ssr.addUnclaimedProjection(componentFrame, QDefaultSlot, slotDefaultChildren);
   }
-  const slotReplayRecords: SSRSlotReplayRecords = new Map();
-  slotReplayRecords.set(componentFrame, new Map([[slotName, slotChildren]]));
-  return slotReplayRecords;
+  return /*#__PURE__*/ _jsxSorted(
+    Slot,
+    slot.varProps,
+    slot.constProps,
+    slotChildren,
+    slot.flags,
+    slot.key
+  );
 }
 
 async function emitRenderedOutOfOrderSegment(

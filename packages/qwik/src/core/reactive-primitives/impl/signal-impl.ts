@@ -3,7 +3,6 @@ import { pad, qwikDebugToString } from '../../debug';
 import { assertTrue } from '../../shared/error/assert';
 import { qError, QError } from '../../shared/error/error';
 import type { Container } from '../../shared/types';
-import type { SerializationContext } from '../../shared/serdes';
 import { isSameContainer } from '../../shared/utils/container';
 import { qDev, qTest } from '../../shared/utils/qdev';
 import { tryGetInvokeContext } from '../../use/use-core';
@@ -11,12 +10,14 @@ import {
   addQrlToSerializationCtx,
   ensureContainsBackRef,
   ensureContainsSubscription,
+  getEffectSerializationContainer,
   scheduleEffects,
 } from '../utils';
 import type { Signal } from '../signal.public';
 import { SignalFlags, type EffectSubscription } from '../types';
 import type { WrappedSignalImpl } from './wrapped-signal-impl';
 import { isServerPlatform } from '../../shared/platform/platform';
+import type { SSRContainer } from '../../ssr/ssr-types';
 
 const DEBUG = false;
 // eslint-disable-next-line no-console
@@ -87,11 +88,13 @@ export class SignalImpl<T = any> implements Signal<T> {
       // to unsubscribe from. So we need to store the reference from the effect back
       // to this signal.
       ensureContainsBackRef(effectSubscriber, this);
-      const serializationContainer = ctx.$container$ || this.$container$;
+      const serializationContainer = getEffectSerializationContainer(
+        ctx.$container$,
+        this.$container$
+      );
       if (shouldRecordExternalRootEffect) {
-        (
-          serializationContainer as (Container & { serializationCtx?: SerializationContext }) | null
-        )?.serializationCtx?.$recordExternalRootEffect$?.(this, effectSubscriber, null);
+        const serializationCtx = (serializationContainer as SSRContainer | null)?.serializationCtx;
+        serializationCtx?.$recordExternalRootEffect$?.(this, effectSubscriber, null);
       }
       isOnServer && addQrlToSerializationCtx(effectSubscriber, serializationContainer);
       DEBUG && log('read->sub', pad('\n' + this.toString(), '  '));

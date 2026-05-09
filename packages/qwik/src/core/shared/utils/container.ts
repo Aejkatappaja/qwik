@@ -1,24 +1,20 @@
 import type { Container, ObjToProxyMap } from '../types';
 
 /** @internal */
-export interface RootContainerOwner {
-  $rootContainer$: Container | null;
-}
-
-/** @internal */
-export interface InnerContainer extends Container, RootContainerOwner {
+export interface InnerContainer extends Container {
   $storeProxyMap$: ObjToProxyMap;
   _didAddQwikLoader?: boolean;
 }
 
-const hasRootContainer = (container: Container): container is Container & RootContainerOwner => {
-  return '$rootContainer$' in container;
+/** @internal */
+export const getRootContainer = (container: Container): Container => {
+  const rootContainer = container.$rootContainer$;
+  return rootContainer || container;
 };
 
 /** @internal */
-export const getRootContainer = (container: Container): Container => {
-  const rootContainer = hasRootContainer(container) ? container.$rootContainer$ : null;
-  return rootContainer || container;
+export const isOutOfOrderSegmentContainer = (container: Container): boolean => {
+  return container.$isOutOfOrderSegment$;
 };
 
 /** @internal */
