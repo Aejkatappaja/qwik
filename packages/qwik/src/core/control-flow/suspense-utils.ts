@@ -133,14 +133,14 @@ export const applySubscriptionPatches = (
         continue;
       }
       const effectsMap = (handler.$effects$ ||= new Map());
-      subscriptions.forEach((subscriptionSet, storeProp) => {
+      for (const [storeProp, subscriptionSet] of subscriptions) {
         let rootEffects = effectsMap.get(storeProp);
         if (!rootEffects) {
           rootEffects = new Set();
           effectsMap.set(storeProp, rootEffects);
         }
         mergeSubscriptionSet(container, handler, target, rootEffects, subscriptionSet);
-      });
+      }
     }
   }
 };
@@ -153,13 +153,13 @@ const mergeSubscriptionSet = (
   patchEffects: Set<EffectSubscription>
 ): void => {
   let newEffects: Set<EffectSubscription> | undefined;
-  patchEffects.forEach((effect) => {
+  for (const effect of patchEffects) {
     if (!rootEffects.has(effect)) {
       rootEffects.add(effect);
       (newEffects ||= new Set()).add(effect);
     }
     (effect.backRef ||= new Set()).add(backRef as any);
-  });
+  }
   if (newEffects) {
     scheduleEffects(container, producer as any, newEffects);
   }
