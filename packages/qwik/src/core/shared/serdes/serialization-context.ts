@@ -105,13 +105,6 @@ export interface SerializationContext {
   $eagerResume$: Set<unknown>;
 
   $setProp$: (obj: any, prop: string, value: any) => void;
-
-  $recordExternalRootEffect$?: (
-    producer: unknown,
-    effect: EffectSubscription,
-    prop: string | symbol | null,
-    sourceEffects?: Map<string | symbol, Set<EffectSubscription>>
-  ) => void;
 }
 
 class SerializationContextImpl implements SerializationContext {

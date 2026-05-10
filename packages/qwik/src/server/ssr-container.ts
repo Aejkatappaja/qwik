@@ -93,9 +93,11 @@ import {
   type SSRInternalStreamWriter,
   type SSROutOfOrderSegment,
   type SSRRenderJSXOptions,
+  type SSRSegmentContainer as ISSRSegmentContainer,
   type SSRWriteChunk,
   type SymbolToChunkResolver,
   type ValueOrPromise,
+  type EffectSubscription,
 } from './qwik-types';
 
 import {
@@ -193,18 +195,6 @@ interface ElementFrame {
   currentFile: string | null;
 }
 
-interface SegmentRenderContext {
-  container: SSRContainer;
-  writer: StringBufferSegmentWriter;
-  htmlChunks: SSRWriteChunk[];
-}
-
-interface SegmentRootCommit {
-  rootIdMap: number[];
-  newRootStart: number;
-  newRootLocalIds: number[];
-}
-
 const noopStreamHandler: IStreamHandler = {
   flush() {},
   waitForPendingFlush() {},
@@ -268,14 +258,14 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
    * https://developer.mozilla.org/en-US/docs/Web/API/TreeWalker
    */
   private depthFirstElementCount: number = -1;
-  private vNodeDatas: VNodeData[] = [];
+  protected vNodeDatas: VNodeData[] = [];
   private vNodeDataOffset = 0;
   private componentStack: ISsrComponentFrame[] = [];
   private cleanupQueue: CleanupQueue = [];
   private emitContainerDataFrame: ElementFrame | null = null;
   public $instanceHash$ = randomStr();
   // Temporary flag to find missing roots after the state was serialized
-  private $noMoreRoots$ = false;
+  protected $noMoreRoots$ = false;
   private qlInclude: QwikLoaderInclude;
   private promiseAttributes: Array<Promise<any>> | null = null;
   private vnodeSegment: string | null = null;
@@ -285,16 +275,16 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
   private outOfOrderPendingSegments: Promise<void>[] = [];
   private outOfOrderReadyRenders: Array<() => Promise<void>> = [];
   private outOfOrderSegmentScripts: string[] = [];
-  private rootContainerReady = false;
+  public rootContainerReady = false;
   private rootContainerDataStarted = false;
-  private rootContainerSerializedRootCount = 0;
   private rootContainerReadyPromise: Promise<void> | null = null;
   private resolveRootContainerReady: (() => void) | null = null;
   private renderQueue: Promise<unknown> = Promise.resolve();
-  private emittedSyncFnCount = 0;
+  public emittedSyncFnCount = 0;
   private emittedQwikEventNames = new Set<string>();
-  private subscriptionPatchRecords: SubscriptionPatchRecords | null = null;
-  public $rootContainer$: SSRContainer | null = null;
+  protected subscriptionPatchRecords: SubscriptionPatchRecords | null = null;
+
+  public rootContainerSerializedRootCount = 0;
 
   constructor(opts: SSRContainerOptions) {
     super(opts.renderOptions.serverData ?? EMPTY_OBJ, opts.locale);
@@ -520,14 +510,14 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
         container: segmentContainer,
         writer,
         htmlChunks,
-      } satisfies SegmentRenderContext,
-    } as SSROutOfOrderSegment;
+      },
+    };
   }
 
   private createSegmentContainer(
     segmentId: string,
     writer: StringBufferSegmentWriter
-  ): SSRContainer {
+  ): SSRContainer & ISSRSegmentContainer {
     const rootFrame: ElementFrame = {
       tagNesting: TagNesting.ANYTHING,
       parent: null,
@@ -536,19 +526,21 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
       vNodeData: [VNodeDataFlag.NONE],
       currentFile: null,
     };
-    const segmentContainer = new SSRContainer({
-      tagName: this.tag,
-      writer,
-      streamHandler: noopStreamHandler as SSRContainerOptions['streamHandler'],
-      locale: this.$locale$,
-      timing: this.timing,
-      buildBase: this.$buildBase$ || '/build/',
-      resolvedManifest: this.resolvedManifest,
-      renderOptions: this.renderOptions,
-    });
+    const segmentContainer = new SSRSegmentContainer(
+      {
+        tagName: this.tag,
+        writer,
+        streamHandler: noopStreamHandler as SSRContainerOptions['streamHandler'],
+        locale: this.$locale$,
+        timing: this.timing,
+        buildBase: this.$buildBase$ || '/build/',
+        resolvedManifest: this.resolvedManifest,
+        renderOptions: this.renderOptions,
+      },
+      this
+    );
 
     const innerSegmentContainer = segmentContainer as typeof segmentContainer & InnerContainer;
-    innerSegmentContainer.$rootContainer$ = this;
     innerSegmentContainer.$isOutOfOrderSegment$ = true;
     innerSegmentContainer.$storeProxyMap$ = this.$storeProxyMap$;
     segmentContainer.serializationCtx = segmentContainer.serializationCtxFactory(
@@ -567,163 +559,12 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
     segmentContainer.componentStack = this.componentStack.slice();
     segmentContainer.vnodeSegment = segmentId;
     segmentContainer.subscriptionPatchRecords = [];
-    segmentContainer.serializationCtx.$recordExternalRootEffect$ = (
-      producer,
-      effect,
-      prop,
-      sourceEffects
-    ) => {
-      recordExternalRootEffect(
-        this.serializationCtx,
-        segmentContainer.serializationCtx,
-        this.$storeProxyMap$,
-        segmentContainer.subscriptionPatchRecords,
-        producer,
-        effect,
-        prop,
-        sourceEffects
-      );
-    };
     segmentContainer.styleIds = this.styleIds;
     segmentContainer.emittedQwikEventNames = this.emittedQwikEventNames;
     segmentContainer.qlInclude = QwikLoaderInclude.Done;
     segmentContainer.$instanceHash$ = this.$instanceHash$;
     innerSegmentContainer._didAddQwikLoader = true;
     return segmentContainer;
-  }
-
-  async $finalizeOutOfOrderSegment$(
-    segmentId: string,
-    segment: SSROutOfOrderSegment
-  ): Promise<string> {
-    const context = (segment as SSROutOfOrderSegment & { context?: SegmentRenderContext }).context;
-    if (!context) {
-      return segment.scripts;
-    }
-    const segmentContainer = context.container;
-    const rootReadyAtSegment = this.rootContainerReady;
-    const segmentSerializationCtx = segmentContainer.serializationCtx;
-    const commit = this.commitSegmentRoots(segmentSerializationCtx);
-    segmentSerializationCtx.$onAddRoot$ = (localId, root, obj) => {
-      this.commitSegmentRoot(localId, root, obj, commit);
-    };
-    try {
-      const rootIdMap = commit.rootIdMap;
-      this.mergeSegmentEventData(segmentSerializationCtx);
-      this.mergeSegmentSyncFns(segmentSerializationCtx);
-      let subscriptionPatchRootId: number | undefined;
-      const subscriptionPatches = rootReadyAtSegment
-        ? segmentContainer.collectSubscriptionPatches(this.rootContainerSerializedRootCount)
-        : undefined;
-      if (subscriptionPatches) {
-        subscriptionPatchRootId = segmentSerializationCtx.$addRoot$(subscriptionPatches);
-      }
-      if (
-        rootReadyAtSegment &&
-        (commit.newRootLocalIds.length > 0 || subscriptionPatchRootId !== undefined)
-      ) {
-        await segmentContainer.emitStatePatchData(
-          segmentId,
-          commit.newRootStart,
-          commit.newRootLocalIds,
-          subscriptionPatchRootId
-        );
-        this.rootContainerSerializedRootCount = this.serializationCtx.$roots$.length;
-      }
-      segmentContainer.$noMoreRoots$ = true;
-      segmentContainer.markVNodeDataForSerialization();
-      segmentContainer.emitVNodeData(segmentId);
-      if (rootReadyAtSegment) {
-        const segmentCtx = segmentContainer.serializationCtx;
-        segmentContainer.serializationCtx = this.serializationCtx;
-        segmentContainer.emittedSyncFnCount = this.emittedSyncFnCount;
-        segmentContainer.emitSyncFnsData(true);
-        this.emittedSyncFnCount = segmentContainer.emittedSyncFnCount;
-        segmentContainer.serializationCtx = segmentCtx;
-        segmentContainer.emitNewQwikEvents();
-      }
-      segmentContainer.emitPatchDataIfNeeded();
-      segmentContainer.drainCleanupQueue();
-      segment.html = renderSSRChunks(context.htmlChunks, rootIdMap);
-      segment.scripts = context.writer.toString(rootIdMap);
-      return segment.scripts;
-    } finally {
-      segmentSerializationCtx.$onAddRoot$ = undefined;
-      this.serializationCtx.$setWriter$(this.writer);
-    }
-  }
-
-  private commitSegmentRoots(segmentSerializationCtx: SerializationContext): SegmentRootCommit {
-    const rootIdMap: number[] = [];
-    const newRootStart = this.serializationCtx.$roots$.length;
-    const newRootLocalIds: number[] = [];
-    const segmentRoots = segmentSerializationCtx.$roots$;
-    const segmentRootObjs = segmentSerializationCtx.$rootObjs$;
-    for (let i = 0; i < segmentRoots.length; i++) {
-      const rootObj = segmentRootObjs[i];
-      this.commitSegmentRoot(i, segmentRoots[i], rootObj, {
-        rootIdMap,
-        newRootStart,
-        newRootLocalIds,
-      });
-    }
-    return { rootIdMap, newRootStart, newRootLocalIds };
-  }
-
-  private commitSegmentRoot(
-    localId: number,
-    root: unknown,
-    rootObj: unknown,
-    commit: SegmentRootCommit
-  ): void {
-    if (commit.rootIdMap[localId] !== undefined) {
-      return;
-    }
-    let rootId = this.serializationCtx.$hasRootId$(rootObj);
-    if (rootId === undefined) {
-      rootId = this.serializationCtx.$commitRoot$(root, rootObj);
-      commit.newRootLocalIds.push(localId);
-    }
-    commit.rootIdMap[localId] = rootId;
-  }
-
-  private mergeSegmentEventData(segmentSerializationCtx: SerializationContext): void {
-    for (const eventName of segmentSerializationCtx.$eventNames$) {
-      this.serializationCtx.$eventNames$.add(eventName);
-    }
-    for (const qrl of segmentSerializationCtx.$eventQrls$) {
-      this.serializationCtx.$eventQrls$.add(qrl);
-    }
-  }
-
-  private mergeSegmentSyncFns(segmentSerializationCtx: SerializationContext): void {
-    this.serializationCtx.$syncFns$.push(...segmentSerializationCtx.$syncFns$);
-  }
-
-  private markVNodeDataForSerialization(): void {
-    for (let i = 0; i < this.vNodeDatas.length; i++) {
-      const vNodeData = this.vNodeDatas[i];
-      if (
-        vNodeData[0] &
-        (VNodeDataFlag.TEXT_DATA |
-          VNodeDataFlag.VIRTUAL_NODE |
-          VNodeDataFlag.ELEMENT_NODE |
-          VNodeDataFlag.REFERENCE)
-      ) {
-        vNodeData[0] |= VNodeDataFlag.SERIALIZE;
-      }
-    }
-  }
-
-  private collectSubscriptionPatches(rootLimit: number) {
-    if (!__EXPERIMENTAL__.suspense || !this.outOfOrderStreaming) {
-      return;
-    }
-    return collectSubscriptionPatches(
-      this.$rootContainer$?.serializationCtx || this.serializationCtx,
-      this.subscriptionPatchRecords,
-      rootLimit
-    );
   }
 
   queueOutOfOrderSegment(segment: Promise<void>): void {
@@ -930,7 +771,7 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
   }
 
   /** Drain cleanup queue and cleanup tasks etc. */
-  private drainCleanupQueue() {
+  protected drainCleanupQueue() {
     let sequences = this.cleanupQueue.pop();
     while (sequences) {
       for (let j = 0; j < sequences.length; j++) {
@@ -1371,25 +1212,8 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
     });
   }
 
-  private emitStatePatchData(
-    segmentId: string,
-    rootStart: number,
-    rootIds: number[],
-    subscriptionPatchRootId?: number | string | number[]
-  ): ValueOrPromise<void> {
-    const attrs = this.statePatchScriptAttrs(segmentId);
-    this.openScript(attrs);
-    this.serializationCtx.$setWriter$(this.writer);
-    return maybeThen(
-      this.serializationCtx.$serializePatch$(rootStart, rootIds, subscriptionPatchRootId),
-      () => {
-        this.closeScript();
-      }
-    );
-  }
-
   /** Add q-d:qidle attribute to eagerly resume some state if needed */
-  private stateScriptAttrs(): Props {
+  protected stateScriptAttrs(): Props {
     const attrs: Props = { type: 'qwik/state', [QInstanceAttr]: this.$instanceHash$ };
     const eagerResume = this.serializationCtx.$eagerResume$;
     if (eagerResume.size > 0) {
@@ -1398,16 +1222,7 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
     return attrs;
   }
 
-  private statePatchScriptAttrs(segmentId?: string): Props {
-    const attrs = this.stateScriptAttrs();
-    attrs[QStatePatchAttr] = true;
-    if (segmentId) {
-      attrs[QSuspenseResolved] = segmentId;
-    }
-    return attrs;
-  }
-
-  private emitSyncFnsData(append = false) {
+  protected emitSyncFnsData(append = false) {
     const fns = this.serializationCtx.$syncFns$;
     const start = append ? this.emittedSyncFnCount : 0;
     if (fns.length > start) {
@@ -1510,13 +1325,13 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
     this.closeScript();
   }
 
-  private openScript(attrs: Props): void {
+  protected openScript(attrs: Props): void {
     this.write('<script');
     this.writeAttrs('script', attrs, true, null, null, true);
     this.write(GT);
   }
 
-  private closeScript(): void {
+  protected closeScript(): void {
     this.write('</script>');
   }
 
@@ -1584,7 +1399,7 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
     }
   }
 
-  private emitNewQwikEvents() {
+  protected emitNewQwikEvents() {
     const eventNames: string[] = [];
     for (const eventName of this.serializationCtx.$eventNames$) {
       if (!this.emittedQwikEventNames.has(eventName)) {
@@ -1865,6 +1680,209 @@ class SSRContainer extends _SharedContainer implements ISSRContainer {
       await Promise.all(this.promiseAttributes);
       this.promiseAttributes = null;
     }
+  }
+}
+
+interface SegmentRootCommit {
+  rootIdMap: number[];
+  newRootStart: number;
+  newRootLocalIds: number[];
+}
+
+export class SSRSegmentContainer extends SSRContainer implements ISSRSegmentContainer {
+  constructor(
+    opts: SSRContainerOptions,
+    public override $rootContainer$: SSRContainer
+  ) {
+    super(opts);
+  }
+
+  $recordExternalRootEffect$(
+    producer: unknown,
+    effect: EffectSubscription,
+    prop: string | symbol | null,
+    sourceEffects?: Map<string | symbol, Set<EffectSubscription>>
+  ): void {
+    recordExternalRootEffect(
+      this.$rootContainer$.serializationCtx,
+      this.serializationCtx,
+      this.$rootContainer$.$storeProxyMap$,
+      this.subscriptionPatchRecords,
+      producer,
+      effect,
+      prop,
+      sourceEffects
+    );
+  }
+
+  async $finalizeOutOfOrderSegment$(
+    segmentId: string,
+    segment: SSROutOfOrderSegment
+  ): Promise<string> {
+    const rootContainer = this.$rootContainer$;
+    const rootReadyAtSegment = rootContainer.rootContainerReady;
+    const segmentSerializationCtx = this.serializationCtx;
+    const commit = this.commitSegmentRoots(rootContainer, segmentSerializationCtx);
+    segmentSerializationCtx.$onAddRoot$ = (localId, root, obj) => {
+      this.commitSegmentRoot(rootContainer, localId, root, obj, commit);
+    };
+    try {
+      const rootIdMap = commit.rootIdMap;
+      this.mergeSegmentEventData(rootContainer, segmentSerializationCtx);
+      this.mergeSegmentSyncFns(rootContainer, segmentSerializationCtx);
+      let subscriptionPatchRootId: number | undefined;
+      const subscriptionPatches = rootReadyAtSegment
+        ? this.collectSubscriptionPatches(
+            rootContainer,
+            rootContainer.rootContainerSerializedRootCount
+          )
+        : undefined;
+      if (subscriptionPatches) {
+        subscriptionPatchRootId = segmentSerializationCtx.$addRoot$(subscriptionPatches);
+      }
+      if (
+        rootReadyAtSegment &&
+        (commit.newRootLocalIds.length > 0 || subscriptionPatchRootId !== undefined)
+      ) {
+        await this.emitStatePatchData(
+          segmentId,
+          commit.newRootStart,
+          commit.newRootLocalIds,
+          subscriptionPatchRootId
+        );
+        rootContainer.rootContainerSerializedRootCount =
+          rootContainer.serializationCtx.$roots$.length;
+      }
+      this.$noMoreRoots$ = true;
+      this.markVNodeDataForSerialization();
+      this.emitVNodeData(segmentId);
+      if (rootReadyAtSegment) {
+        const segmentCtx = this.serializationCtx;
+        this.serializationCtx = rootContainer.serializationCtx;
+        this.emittedSyncFnCount = rootContainer.emittedSyncFnCount;
+        this.emitSyncFnsData(true);
+        rootContainer.emittedSyncFnCount = this.emittedSyncFnCount;
+        this.serializationCtx = segmentCtx;
+        this.emitNewQwikEvents();
+      }
+      this.emitPatchDataIfNeeded();
+      this.drainCleanupQueue();
+      segment.html = renderSSRChunks(segment.context.htmlChunks, rootIdMap);
+      segment.scripts = segment.context.writer.toString(rootIdMap);
+      return segment.scripts;
+    } finally {
+      segmentSerializationCtx.$onAddRoot$ = undefined;
+      rootContainer.serializationCtx.$setWriter$(rootContainer.writer);
+    }
+  }
+
+  private commitSegmentRoots(
+    rootContainer: SSRContainer,
+    segmentSerializationCtx: SerializationContext
+  ): SegmentRootCommit {
+    const rootIdMap: number[] = [];
+    const newRootStart = rootContainer.serializationCtx.$roots$.length;
+    const newRootLocalIds: number[] = [];
+    const segmentRoots = segmentSerializationCtx.$roots$;
+    const segmentRootObjs = segmentSerializationCtx.$rootObjs$;
+    for (let i = 0; i < segmentRoots.length; i++) {
+      const rootObj = segmentRootObjs[i];
+      this.commitSegmentRoot(rootContainer, i, segmentRoots[i], rootObj, {
+        rootIdMap,
+        newRootStart,
+        newRootLocalIds,
+      });
+    }
+    return { rootIdMap, newRootStart, newRootLocalIds };
+  }
+
+  private commitSegmentRoot(
+    rootContainer: SSRContainer,
+    localId: number,
+    root: unknown,
+    rootObj: unknown,
+    commit: SegmentRootCommit
+  ): void {
+    if (commit.rootIdMap[localId] !== undefined) {
+      return;
+    }
+    let rootId = rootContainer.serializationCtx.$hasRootId$(rootObj);
+    if (rootId === undefined) {
+      rootId = rootContainer.serializationCtx.$commitRoot$(root, rootObj);
+      commit.newRootLocalIds.push(localId);
+    }
+    commit.rootIdMap[localId] = rootId;
+  }
+
+  private mergeSegmentEventData(
+    rootContainer: SSRContainer,
+    segmentSerializationCtx: SerializationContext
+  ): void {
+    for (const eventName of segmentSerializationCtx.$eventNames$) {
+      rootContainer.serializationCtx.$eventNames$.add(eventName);
+    }
+    for (const qrl of segmentSerializationCtx.$eventQrls$) {
+      rootContainer.serializationCtx.$eventQrls$.add(qrl);
+    }
+  }
+
+  private mergeSegmentSyncFns(
+    rootContainer: SSRContainer,
+    segmentSerializationCtx: SerializationContext
+  ): void {
+    rootContainer.serializationCtx.$syncFns$.push(...segmentSerializationCtx.$syncFns$);
+  }
+
+  private markVNodeDataForSerialization(): void {
+    for (let i = 0; i < this.vNodeDatas.length; i++) {
+      const vNodeData = this.vNodeDatas[i];
+      if (
+        vNodeData[0] &
+        (VNodeDataFlag.TEXT_DATA |
+          VNodeDataFlag.VIRTUAL_NODE |
+          VNodeDataFlag.ELEMENT_NODE |
+          VNodeDataFlag.REFERENCE)
+      ) {
+        vNodeData[0] |= VNodeDataFlag.SERIALIZE;
+      }
+    }
+  }
+
+  private collectSubscriptionPatches(rootContainer: SSRContainer, rootLimit: number) {
+    if (!__EXPERIMENTAL__.suspense || !this.outOfOrderStreaming) {
+      return;
+    }
+    return collectSubscriptionPatches(
+      rootContainer.serializationCtx,
+      this.subscriptionPatchRecords,
+      rootLimit
+    );
+  }
+
+  private emitStatePatchData(
+    segmentId: string,
+    rootStart: number,
+    rootIds: number[],
+    subscriptionPatchRootId?: number | string | number[]
+  ): ValueOrPromise<void> {
+    const attrs = this.statePatchScriptAttrs(segmentId);
+    this.openScript(attrs);
+    this.serializationCtx.$setWriter$(this.writer);
+    return maybeThen(
+      this.serializationCtx.$serializePatch$(rootStart, rootIds, subscriptionPatchRootId),
+      () => {
+        this.closeScript();
+      }
+    );
+  }
+
+  private statePatchScriptAttrs(segmentId?: string): Props {
+    const attrs = this.stateScriptAttrs();
+    attrs[QStatePatchAttr] = true;
+    if (segmentId) {
+      attrs[QSuspenseResolved] = segmentId;
+    }
+    return attrs;
   }
 }
 

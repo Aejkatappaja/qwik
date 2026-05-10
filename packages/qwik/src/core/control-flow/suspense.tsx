@@ -5,7 +5,6 @@ import type { Signal } from '../reactive-primitives/signal.public';
 import { componentQrl } from '../shared/component.public';
 import { _jsxSorted } from '../shared/jsx/jsx-internal';
 import { Fragment } from '../shared/jsx/jsx-runtime';
-import { directGetPropsProxyProp } from '../shared/jsx/props-proxy';
 import { Slot } from '../shared/jsx/slot.public';
 import type { JSXNodeInternal, JSXOutput } from '../shared/jsx/types/jsx-node';
 import type { JSXChildren } from '../shared/jsx/types/jsx-qwik-attributes';
@@ -21,7 +20,7 @@ import {
 } from '../shared/utils/markers';
 import { resolveSlotName } from '../shared/utils/prop';
 import { createInternalServerComponent } from '../ssr/internal-server-component';
-import type { SSRContainer, SSRRenderJSXOptions } from '../ssr/ssr-types';
+import type { SSRContainer, SSROutOfOrderSegment, SSRRenderJSXOptions } from '../ssr/ssr-types';
 import { useComputedQrl } from '../use/use-computed';
 import { useCursorBoundary, type CursorBoundary } from '../use/use-cursor-boundary';
 import { useSignal } from '../use/use-signal';
@@ -189,14 +188,9 @@ type SSRDeferredSlotProps = {
 
 const SSRDeferredSlot = __EXPERIMENTAL__.suspense
   ? /*#__PURE__*/ createInternalServerComponent<SSRDeferredSlotProps>(async (ssr, jsx, options) => {
-      const boundaryId =
-        directGetPropsProxyProp<number | undefined, unknown>(jsx, 'boundaryId') ??
-        ssr.nextOutOfOrderId();
+      const boundaryId = (jsx.varProps.boundaryId as number | undefined) ?? ssr.nextOutOfOrderId();
       const contentSegment = `${boundaryId}`;
-      const revealBoundary = directGetPropsProxyProp<OutOfOrderRevealBoundary | null, unknown>(
-        jsx,
-        'reveal'
-      );
+      const revealBoundary = jsx.varProps.reveal as OutOfOrderRevealBoundary | null;
       const content = ssr.segment(
         contentSegment,
         createClaimedDeferredSlot(ssr, jsx, options),
@@ -252,18 +246,14 @@ async function emitRenderedOutOfOrderSegment(
   ssr: SSRContainer,
   boundaryId: number,
   segmentId: string,
-  rendered: Awaited<ReturnType<SSRContainer['segment']>>,
+  rendered: SSROutOfOrderSegment,
   revealBoundary: OutOfOrderRevealBoundary | null
 ): Promise<void> {
   await ssr.$runQueuedRenderBeforeRootState$(async () => {
-    const scripts = await (
-      ssr as SSRContainer & {
-        $finalizeOutOfOrderSegment$(
-          segmentId: string,
-          rendered: Awaited<ReturnType<SSRContainer['segment']>>
-        ): Promise<string>;
-      }
-    ).$finalizeOutOfOrderSegment$(segmentId, rendered);
+    const scripts = await rendered.context.container.$finalizeOutOfOrderSegment$(
+      segmentId,
+      rendered
+    );
     writeOutOfOrderResolvedTemplate(ssr, boundaryId, rendered.html, revealBoundary);
     ssr.emitOutOfOrderSegmentScripts(scripts);
     ssr.emitInlineScript(`qO(${boundaryId})`);

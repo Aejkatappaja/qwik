@@ -23,7 +23,7 @@ import {
 import type { PropsProxy, PropsProxyHandler } from '../../shared/jsx/props-proxy';
 import { isDev, isServer } from '@qwik.dev/core/build';
 import { isServerPlatform } from '../../shared/platform/platform';
-import type { SSRContainer } from '../../ssr/ssr-types';
+import type { SSRSegmentContainer } from '../../ssr/ssr-types';
 
 const DEBUG = false;
 
@@ -280,16 +280,22 @@ export function addStoreEffect(
   // to unsubscribe from. So we need to store the reference from the effect back
   // to this signal.
   ensureContainsBackRef(effectSubscription, target);
-  const serializationContainer = getEffectSerializationContainer(
-    renderContainer,
-    store.$container$
-  );
-  if (shouldRecordExternalRootEffect) {
-    const serializationCtx = (serializationContainer as SSRContainer | null)?.serializationCtx;
-    serializationCtx?.$recordExternalRootEffect$?.(target, effectSubscription, prop, effectsMap);
+  if (isOnServer) {
+    const serializationContainer = getEffectSerializationContainer(
+      renderContainer,
+      store.$container$
+    );
+    if (shouldRecordExternalRootEffect) {
+      (serializationContainer as SSRSegmentContainer | null)?.$recordExternalRootEffect$?.(
+        target,
+        effectSubscription,
+        prop,
+        effectsMap
+      );
+    }
+    // TODO is this needed with the preloader?
+    addQrlToSerializationCtx(effectSubscription, serializationContainer);
   }
-  // TODO is this needed with the preloader?
-  isOnServer && addQrlToSerializationCtx(effectSubscription, serializationContainer);
 
   DEBUG &&
     log(

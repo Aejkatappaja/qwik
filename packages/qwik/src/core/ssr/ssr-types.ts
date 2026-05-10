@@ -14,6 +14,7 @@ import type { Props } from '../shared/jsx/jsx-runtime';
 import type { JSXNodeInternal } from '../shared/jsx/types/jsx-node';
 import type { QRL } from '../shared/qrl/qrl.public';
 import type { SsrNodeFlags } from '../shared/types';
+import type { EffectSubscription } from '../reactive-primitives/types';
 import type { ResourceReturnInternal } from '../use/use-resource';
 
 /** @internal */
@@ -33,6 +34,7 @@ export interface StreamWriter {
 export interface SSRInternalStreamWriter extends StreamWriter {
   writeRootRef(id: number): ValueOrPromise<void>;
   writeRootRefPath(path: number[]): ValueOrPromise<void>;
+  toString(remap?: number[]): string;
 }
 
 export interface ISsrNode {
@@ -73,10 +75,17 @@ export interface SSRRenderJSXOptions {
   parentComponentFrame: ISsrComponentFrame | null;
 }
 
+export interface SegmentRenderContext {
+  container: SSRSegmentContainer;
+  writer: SSRInternalStreamWriter;
+  htmlChunks: SSRWriteChunk[];
+}
+
 export interface SSROutOfOrderSegment {
   html: string;
   scripts: string;
   suspended: Promise<unknown> | null;
+  context: SegmentRenderContext;
 }
 
 export interface SSRContainer extends Container {
@@ -154,6 +163,17 @@ export interface SSRContainer extends Container {
     attrName: string,
     serializedValue: string | boolean | null
   ): void;
+}
+
+export interface SSRSegmentContainer extends SSRContainer {
+  $rootContainer$: SSRContainer;
+  $recordExternalRootEffect$(
+    producer: unknown,
+    effect: EffectSubscription,
+    prop: string | symbol | null,
+    sourceEffects?: Map<string | symbol, Set<EffectSubscription>>
+  ): void;
+  $finalizeOutOfOrderSegment$(segmentId: string, segment: SSROutOfOrderSegment): Promise<string>;
 }
 
 /** @internal */

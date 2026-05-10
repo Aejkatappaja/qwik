@@ -4,7 +4,6 @@ import type { Signal } from '../reactive-primitives/signal.public';
 import { createSignal } from '../reactive-primitives/signal.public';
 import { componentQrl } from '../shared/component.public';
 import { _jsxSorted } from '../shared/jsx/jsx-internal';
-import { directGetPropsProxyProp } from '../shared/jsx/props-proxy';
 import { Slot } from '../shared/jsx/slot.public';
 import { isServerPlatform } from '../shared/platform/platform';
 import { inlinedQrl } from '../shared/qrl/qrl';
@@ -161,10 +160,7 @@ type SSRRevealSlotProps = {
 const SSRRevealSlot = __EXPERIMENTAL__.suspense
   ? /*#__PURE__*/ createInternalServerComponent<SSRRevealSlotProps>(
       (ssr, jsx, _options, enqueue) => {
-        const coordinator = directGetPropsProxyProp<OutOfOrderRevealCoordinator, unknown>(
-          jsx,
-          'coordinator'
-        );
+        const coordinator = jsx.varProps.coordinator as OutOfOrderRevealCoordinator;
         enqueue(() => {
           const script = coordinator.script();
           if (!script) {

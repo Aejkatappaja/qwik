@@ -66,7 +66,7 @@ export class StringBufferSegmentWriter implements SSRInternalStreamWriter {
     return chunks;
   }
 
-  toString(remap: number[]) {
+  toString(remap?: number[]) {
     return renderSSRChunks(this.chunks, remap);
   }
 }
