@@ -7,7 +7,7 @@ import { _jsxSorted } from '../shared/jsx/jsx-internal';
 import { Fragment } from '../shared/jsx/jsx-runtime';
 import { directGetPropsProxyProp } from '../shared/jsx/props-proxy';
 import { Slot } from '../shared/jsx/slot.public';
-import type { JSXOutput } from '../shared/jsx/types/jsx-node';
+import type { JSXNodeInternal, JSXOutput } from '../shared/jsx/types/jsx-node';
 import type { JSXChildren } from '../shared/jsx/types/jsx-qwik-attributes';
 import { isServerPlatform } from '../shared/platform/platform';
 import { _fnSignal } from '../shared/qrl/inlined-fn';
@@ -197,17 +197,9 @@ const SSRDeferredSlot = __EXPERIMENTAL__.suspense
         jsx,
         'reveal'
       );
-      const slot = /*#__PURE__*/ _jsxSorted(
-        Slot,
-        jsx.varProps,
-        jsx.constProps,
-        jsx.children,
-        jsx.flags,
-        jsx.key
-      );
       const content = ssr.segment(
         contentSegment,
-        createClaimedDeferredSlot(ssr, slot, options) || slot,
+        createClaimedDeferredSlot(ssr, jsx, options),
         options
       );
 
@@ -223,15 +215,22 @@ const SSRDeferredSlot = __EXPERIMENTAL__.suspense
 
 function createClaimedDeferredSlot(
   ssr: SSRContainer,
-  slot: ReturnType<typeof _jsxSorted>,
+  jsx: JSXNodeInternal,
   options: SSRRenderJSXOptions
-): ReturnType<typeof _jsxSorted> | null {
+): ReturnType<typeof _jsxSorted> {
   const componentFrame = options.parentComponentFrame;
   if (!componentFrame) {
-    return null;
+    return /*#__PURE__*/ _jsxSorted(
+      Slot,
+      jsx.varProps,
+      jsx.constProps,
+      jsx.children,
+      jsx.flags,
+      jsx.key
+    );
   }
-  const slotName = resolveSlotName(componentFrame.componentNode, slot, ssr);
-  const slotDefaultChildren = (slot.children || null) as JSXChildren | null;
+  const slotName = resolveSlotName(componentFrame.componentNode, jsx, ssr);
+  const slotDefaultChildren = (jsx.children || null) as JSXChildren | null;
   const slotChildren =
     (
       componentFrame as unknown as { claimChildrenForSlot(slotName: string): JSXChildren | null }
@@ -241,11 +240,11 @@ function createClaimedDeferredSlot(
   }
   return /*#__PURE__*/ _jsxSorted(
     Slot,
-    slot.varProps,
-    slot.constProps,
+    jsx.varProps,
+    jsx.constProps,
     slotChildren,
-    slot.flags,
-    slot.key
+    jsx.flags,
+    jsx.key
   );
 }
 
