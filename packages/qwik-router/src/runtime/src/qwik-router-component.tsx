@@ -1060,30 +1060,23 @@ export const QwikRouterMockProvider = component$<QwikRouterMockProps>((props) =>
 export const QwikCityMockProvider = QwikRouterMockProvider;
 
 export interface ClientSPAWindow extends Window {
-  /** @deprecated Use "_qRouterHistoryPatch" instead. Will be removed in V3 */
-  _qCityHistoryPatch?: boolean;
-  /** @deprecated Use "_qRouterSPA" instead. Will be removed in V3 */
-  _qCitySPA?: boolean;
-  /** @deprecated Use "_qRouterScrollEnabled" instead. Will be removed in V3 */
-  _qCityScrollEnabled?: boolean;
-  /** @deprecated Use "_qRouterScrollDebounce" instead. Will be removed in V3 */
-  _qCityScrollDebounce?: ReturnType<typeof setTimeout>;
-  /** @deprecated Use "_qRouterInitPopstate" instead. Will be removed in V3 */
-  _qCityInitPopstate?: () => void;
-  /** @deprecated Use "_qRouterInitAnchors" instead. Will be removed in V3 */
-  _qCityInitAnchors?: (event: MouseEvent) => void;
-  /** @deprecated Use "_qRouterInitVisibility" instead. Will be removed in V3 */
-  _qCityInitVisibility?: () => void;
-  /** @deprecated Use "_qRouterInitScroll" instead. Will be removed in V3 */
-  _qCityInitScroll?: () => void;
+  /** @internal */
   _qRouterHistoryPatch?: boolean;
+  /** @internal */
   _qRouterSPA?: boolean;
+  /** @internal */
   _qRouterScrollEnabled?: boolean;
+  /** @internal */
   _qRouterScrollDebounce?: ReturnType<typeof setTimeout>;
+  /** @internal */
   _qRouterInitPopstate?: () => void;
+  /** @internal */
   _qRouterInitAnchors?: (event: MouseEvent) => void;
+  /** @internal */
   _qRouterInitVisibility?: () => void;
+  /** @internal */
   _qRouterInitScroll?: () => void;
+  /** @internal */
   _qcs?: boolean;
 }
 
@@ -1202,15 +1195,7 @@ function initializeSPA(goto: RouteNavigate, scroller: HTMLElement) {
       document.addEventListener(
         'visibilitychange',
         () => {
-          if (
-            (window._qRouterScrollEnabled || window._qCityScrollEnabled) &&
-            document.visibilityState === 'hidden'
-          ) {
-            if (window._qCityScrollEnabled) {
-              console.warn(
-                '"_qCityScrollEnabled" is deprecated. Use "_qRouterScrollEnabled" instead.'
-              );
-            }
+          if (window._qRouterScrollEnabled && document.visibilityState === 'hidden') {
             // Last & most reliable point to commit state.
             // Do not clear timeout here in case debounce gets to run later.
             const scrollState = currentScrollState(scroller);
@@ -1227,8 +1212,7 @@ function initializeSPA(goto: RouteNavigate, scroller: HTMLElement) {
     window.addEventListener(
       'scroll',
       () => {
-        // TODO: remove "_qCityScrollEnabled" condition in v3
-        if (!window._qRouterScrollEnabled && !window._qCityScrollEnabled) {
+        if (!window._qRouterScrollEnabled) {
           return;
         }
 
