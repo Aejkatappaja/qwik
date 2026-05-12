@@ -40,6 +40,7 @@ import { QRL } from './components/qrl/qrl';
 import { AsyncRoot } from './components/use-async/use-async';
 import { Backpatching } from './components/backpatching/backpatching';
 import { EachRoot } from './components/each/each';
+import { ShowRoot } from './components/show/show';
 import { SuspenseRoot } from './components/suspense/suspense';
 
 const tests: Record<string, FunctionComponent> = {
@@ -81,6 +82,7 @@ const tests: Record<string, FunctionComponent> = {
   '/e2e/async-computed': () => <AsyncRoot />,
   '/e2e/backpatching': () => <Backpatching />,
   '/e2e/each': () => <EachRoot />,
+  '/e2e/show': () => <ShowRoot />,
   '/e2e/suspense': () => <SuspenseRoot />,
   '/e2e/worker': () => <WorkerRoot />,
 };

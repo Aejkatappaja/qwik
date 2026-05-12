@@ -8,7 +8,7 @@ export default defineConfig({
       debug: !true,
       srcDir: `./packages/qwik/src`,
       devTools: { hmr: false },
-      experimental: ['each', 'suspense'],
+      experimental: ['each', 'show', 'suspense'],
     }),
     tsconfigPaths({ ignoreConfigErrors: true }),
   ],
