@@ -1,12 +1,19 @@
 ---
-title: Suspense | Components
-keywords: 'suspense, reveal, fallback, async rendering, loading'
+title: "\U0001F9EA Suspense | Experimental"
+keywords: 'suspense, reveal, fallback, async rendering, loading, out-of-order streaming'
 ---
 
-import CodeSandbox from '../../../../../components/code-sandbox/index.tsx';
+import CodeSandbox from '../../../../components/code-sandbox/index.tsx';
 import { Note } from '~/components/note/note';
 
 # Suspense
+
+**Stage:** `implementation`
+
+<Note>
+  `Suspense` and out-of-order streaming are experimental. Their API and rendering behavior may still
+  change as the feature develops.
+</Note>
 
 `<Suspense>` shows a fallback while its content is loading.
 
