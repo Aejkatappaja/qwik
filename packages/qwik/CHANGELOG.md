@@ -1,5 +1,13 @@
 # @qwik.dev/core
 
+## 2.0.0-beta.36
+
+### Patch Changes
+
+- 🐞🩹 expose `getClientManifest` from the `@qwik.dev/core` root package types. (by [@Varixo](https://github.com/Varixo) in [#8630](https://github.com/QwikDev/qwik/pull/8630))
+
+- 🐞🩹 we removed the vite preload helper from the built bundles. This reduces total bundle size of all bundles by about 3%. (by [@maiieul](https://github.com/maiieul) in [#8617](https://github.com/QwikDev/qwik/pull/8617))
+
 ## 2.0.0-beta.35
 
 ### Minor Changes
